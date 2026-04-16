@@ -15,11 +15,11 @@ jobs:
     strategy:
       matrix:
         include:
-          # ARM64 (Raspberry Pi) build configuration
+          # ARM64 (Raspberry Pi)
           - platform: linux/arm64
             deb_arch: arm64
             pkg_config_arch: aarch64-linux-gnu
-          # x64 (Standard PC/Server) build configuration
+          # x64 (Standard PC/Server)
           - platform: linux/amd64
             deb_arch: amd64
             pkg_config_arch: x86_64-linux-gnu
@@ -55,12 +55,12 @@ jobs:
             apt-get update -y && \
             apt-get install -y build-essential cups libcups2 libcupsimage2 libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall pkg-config ccache && \
             
-            # Set paths and linker flags to resolve 'DSO missing' errors
+            # Export paths and linker flags
             export PKG_CONFIG_PATH=\"/usr/lib/${{ matrix.pkg_config_arch }}/pkgconfig:/usr/lib/pkgconfig:\$PKG_CONFIG_PATH\" && \
             export PATH=\"/usr/lib/ccache:\$PATH\" && \
             export LDFLAGS=\"-lcups -lcupsimage\" && \
             
-            # Patch the Makefile to use Debian's bundled JBIG library
+            # Patch the Makefile for Debian's JBIG library
             find . -type f -name '*.mk' -exec sed -i 's/-ljbig85/-ljbig/g' {} + && \
             
             make clean && \
@@ -68,19 +68,19 @@ jobs:
             make drv && \
             make ppd && \
             
-            # Generate the .deb file with necessary runtime dependencies
+            # Use DESTDIR to stage the install for checkinstall
+            mkdir -p /tmp/splix-install
             checkinstall -D --install=no --default \
               --pkgname='splix' \
               --pkgversion='2.0.2' \
               --maintainer='github-actions' \
               --pkgarch='${{ matrix.deb_arch }}' \
               --requires='cups, libcups2, libcupsimage2, libjbig0' \
-              make install && \
+              make DESTDIR=/tmp/splix-install install && \
               
             cp *.deb /workspace/artifacts/
           "
 
-      # This ensures you can download the finished packages from the Actions tab
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
