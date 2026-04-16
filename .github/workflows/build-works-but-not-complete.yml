@@ -1,4 +1,4 @@
-name: Build Splix Drivers
+name: Build Splix Drivers - V1
 
 on:
   push:
