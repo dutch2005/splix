@@ -1,0 +1,66 @@
+name: Build Splix Drivers
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch: # Gives you a "Run workflow" button in the GitHub UI
+
+jobs:
+  build:
+    name: Build for ${{ matrix.deb_arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # This configures the ARM64 (Raspberry Pi) build
+          - arch: aarch64
+            distro: debian_latest
+            deb_arch: arm64
+          # This configures the x64 (Standard PC/Server) build
+          - arch: x86_64
+            distro: debian_latest
+            deb_arch: amd64
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Compile and Build .deb inside emulated environment
+        uses: uraimo/run-on-arch-action@v2
+        id: build
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ${{ matrix.distro }}
+          githubToken: ${{ github.token }}
+          
+          # Create a shared folder to extract the finished .deb file
+          setup: |
+            mkdir -p "${PWD}/artifacts"
+          dockerRunArgs: |
+            --volume "${PWD}/artifacts:/artifacts"
+            
+          # The exact commands we ran on the Pi, but automated!
+          run: |
+            apt-get update -y
+            apt-get install -y build-essential libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall
+            
+            make clean
+            make
+            make drv
+            make ppd
+            
+            checkinstall -D --install=no --default \
+              --pkgname="splix" \
+              --pkgversion="2.0.2" \
+              --maintainer="github-actions" \
+              --pkgarch="${{ matrix.deb_arch }}" \
+              --requires="cups, libcups2, libcupsimage2, libjbig0" \
+              make install
+              
+            cp *.deb /artifacts/
+
+      - name: Upload .deb Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: splix-deb-${{ matrix.deb_arch }}
+          path: artifacts/*.deb
