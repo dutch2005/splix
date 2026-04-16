@@ -111,9 +111,9 @@ jobs:
               cmake --build /tmp/splix-build --parallel "$(nproc)"
 
               # ── Package as .deb ────────────────────────────────────────────
-              # Fallback to 2.0.2 if this isn't a tagged release
+              # Fallback to 2.0.2 if this is not a tagged release
               PKG_VERSION="${GITHUB_REF_NAME:-2.0.2}"
-              if [ "${PKG_VERSION}" = "''" ] || [ "${PKG_VERSION}" = "master" ] || [ "${PKG_VERSION}" = "main" ]; then
+              if [ "${PKG_VERSION}" = "" ] || [ "${PKG_VERSION}" = "master" ] || [ "${PKG_VERSION}" = "main" ]; then
                 PKG_VERSION="2.0.2"
               fi
 
