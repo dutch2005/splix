@@ -346,17 +346,30 @@ In CI, cross-compilation is already the default — no QEMU is used.
 
 To prevent bad commits (such as failing CMake configuration, unlinked binaries, or broken macro definitions) from reaching the GitHub CI workflow, SpliX includes a localized native test simulator. 
 
-### Running tests manually
-You can invoke the simulation manually at any time to verify that your current source tree successfully compiles with CMake and that the binaries link correctly:
+### Running tests locally (Native Sandbox)
+You can invoke the simulation manually at any time to verify that your current source tree successfully compiles with CMake and that the binaries link correctly natively:
 
 ```bash
 ./tests/test_build.sh
 ```
 
+### Running tests locally (Docker CI Simulator)
+To run the *exact* GitHub Actions pipeline logic (Debian oldstable compilation, dpkg-deb packaging, and artifact generation) locally through Docker, invoke the Docker CI simulator. 
+It supports building for either `amd64` or `arm64` via the script arguments.
+
+```bash
+# Simulates CI pipeline for AMD64
+./tests/test_ci_docker.sh amd64
+
+# Simulates CI pipeline for ARM64 using multiarch cross-compiler
+./tests/test_ci_docker.sh arm64
+```
+Once completed, it will drop the fully constructed `.deb` files into a local `./artifacts` directory.
+
 ### Enabling the Git pre-push hook (Recommended)
-You can set git to automatically trigger these tests and block your `git push` if they fail. To install the hook, simply run:
+You can set git to automatically trigger the basic native sandbox tests and block your `git push` if they fail. To install the hook, simply run:
 
 ```bash
 git config core.hooksPath .githooks
 ```
-Now, whenever you fire a `git push`, the local `.githooks/pre-push` script will transparently launch the `test_build.sh` sandbox to ensure all code compiles syntactically flawlessly before submitting to the CI workflow.
+Now, whenever you fire a `git push`, the local `.githooks/pre-push` script will transparently launch the native `test_build.sh` sandbox to ensure all code compiles syntactically flawlessly before submitting to the CI workflow.
