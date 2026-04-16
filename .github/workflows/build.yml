@@ -31,14 +31,32 @@ jobs:
         if: matrix.deb_arch == 'arm64'
         uses: docker/setup-qemu-action@v3
 
-      # Use standard Docker commands with the N-1 'oldstable' strategy
+      # Set up GitHub's free caching, uniquely keyed by architecture so ARM and x64 don't mix
+      - name: Setup Compiler Cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.deb_arch }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.deb_arch }}-
+
+      # Use standard Docker commands with the N-1 'oldstable' strategy and injected caching!
       - name: Compile and Build natively via Debian Old-Stable
         run: |
           mkdir -p "${PWD}/artifacts"
+          mkdir -p "${PWD}/.ccache"
           
-          docker run --rm --platform ${{ matrix.platform }} -v "${PWD}:/workspace" -w /workspace debian:oldstable bash -c "
+          docker run --rm --platform ${{ matrix.platform }} \
+            -v "${PWD}:/workspace" \
+            -v "${PWD}/.ccache:/root/.ccache" \
+            -w /workspace \
+            -e CCACHE_DIR=/root/.ccache \
+            debian:oldstable bash -c "
+            
             apt-get update -y && \
-            apt-get install -y build-essential libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall pkg-config && \
+            apt-get install -y build-essential libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall pkg-config ccache && \
+            
+            export PATH=\"/usr/lib/ccache:\$PATH\" && \
             
             find . -type f -name '*.mk' -exec sed -i 's/-ljbig85/-ljbig/g' {} + && \
             
