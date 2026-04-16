@@ -15,6 +15,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_EXTENSIONS        OFF)   # -std=c++11, not -std=gnu++11
 
 # ────────────────────────────────────────────────────────────────────────────
+# Global Configuration Options
+# ────────────────────────────────────────────────────────────────────────────
+option(DISABLE_JBIG "Disable JBIG compression" OFF)
+option(DISABLE_THREADS "Disable POSIX threads" OFF)
+option(DISABLE_BLACKOPTIM "Disable black optimization" OFF)
+set(THREADS "2" CACHE STRING "Number of threads to use")
+set(CACHESIZE "30" CACHE STRING "Cache size in MB")
+
+if(DISABLE_THREADS)
+    add_compile_definitions(DISABLE_THREADS)
+else()
+    add_compile_definitions(THREADS=${THREADS} CACHESIZE=${CACHESIZE})
+endif()
+
+if(DISABLE_JBIG)
+    add_compile_definitions(DISABLE_JBIG)
+endif()
+
+if(DISABLE_BLACKOPTIM)
+    add_compile_definitions(DISABLE_BLACKOPTIM)
+endif()
+
+# ────────────────────────────────────────────────────────────────────────────
 # Core Dependencies
 # ────────────────────────────────────────────────────────────────────────────
 # We use CMake's built-in `FindCups` module because it natively searches 
