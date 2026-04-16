@@ -31,7 +31,7 @@ jobs:
         if: matrix.deb_arch == 'arm64'
         uses: docker/setup-qemu-action@v3
 
-      # Now we can use standard Docker commands with the N-1 'oldstable' strategy!
+      # Use standard Docker commands with the N-1 'oldstable' strategy
       - name: Compile and Build natively via Debian Old-Stable
         run: |
           mkdir -p "${PWD}/artifacts"
