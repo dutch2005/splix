@@ -28,10 +28,10 @@ DRV_ONLY		?= 0
 
 
 # Flags
-CXXFLAGS		+= `pkg-config --cflags cups` -Iinclude -Wall -I/opt/local/include
+CXXFLAGS		+= `pkg-config --cflags cups` -Iinclude -Wall -std=c++11
 DEBUG_CXXFLAGS		+= -DDEBUG  -DDUMP_CACHE
 OPTIM_CXXFLAGS 		+= -g
-rastertoqpdl_LDFLAGS	:= $(LDFLAGS) -L/opt/local/lib
+rastertoqpdl_LDFLAGS	:= $(LDFLAGS)
 rastertoqpdl_LIBS	:= `pkg-config --libs cups` -lcupsimage
 pstoqpdl_LDFLAGS	:= $(LDFLAGS)
 pstoqpdl_LIBS		:= `pkg-config --libs cups` -lcupsimage
@@ -48,7 +48,7 @@ endif
 ifneq ($(DISABLE_JBIG),0)
 CXXFLAGS		+= -DDISABLE_JBIG
 else
-rastertoqpdl_LIBS	+= -ljbig85
+rastertoqpdl_LIBS	+= -ljbig
 endif
 ifneq ($(DISABLE_BLACKOPTIM),0)
 CXXFLAGS		+= -DDISABLE_BLACKOPTIM
