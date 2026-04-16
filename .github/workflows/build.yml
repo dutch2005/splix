@@ -117,9 +117,7 @@ jobs:
                 PKG_VERSION="2.0.2"
               fi
 
-              mkdir -p /tmp/splix-install
               cd /tmp/splix-build
-
               checkinstall \
                 -D --install=no --default \
                 --pkgname="splix" \
@@ -128,7 +126,7 @@ jobs:
                 --pkgarch="${DEB_ARCH}" \
                 --requires="cups, libcups2, libcupsimage2, libjbig0" \
                 --nodoc \
-                cmake --install . --prefix="" --destdir /tmp/splix-install
+                make install
 
               # Use find instead of glob — the glob expands before the .deb
               # is written, causing the original workflows to silently fail.
