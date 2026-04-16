@@ -118,6 +118,14 @@ jobs:
               fi
 
               cd /tmp/splix-build
+
+              mkdir -p /usr/lib/cups/filter \
+                       /usr/share/cups/model/samsung \
+                       /usr/share/cups/model/xerox \
+                       /usr/share/cups/model/dell \
+                       /usr/share/cups/model/lexmark \
+                       /usr/share/cups/model/toshiba
+
               checkinstall \
                 -D --install=no --default \
                 --pkgname="splix" \
