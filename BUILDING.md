@@ -341,3 +341,22 @@ of running inside a QEMU-emulated container.  See the
 [Cross-Compilation](#cross-compilation-arm64) section above.
 
 In CI, cross-compilation is already the default — no QEMU is used.
+
+## Pre-Push Automated Testing
+
+To prevent bad commits (such as failing CMake configuration, unlinked binaries, or broken macro definitions) from reaching the GitHub CI workflow, SpliX includes a localized native test simulator. 
+
+### Running tests manually
+You can invoke the simulation manually at any time to verify that your current source tree successfully compiles with CMake and that the binaries link correctly:
+
+```bash
+./tests/test_build.sh
+```
+
+### Enabling the Git pre-push hook (Recommended)
+You can set git to automatically trigger these tests and block your `git push` if they fail. To install the hook, simply run:
+
+```bash
+git config core.hooksPath .githooks
+```
+Now, whenever you fire a `git push`, the local `.githooks/pre-push` script will transparently launch the `test_build.sh` sandbox to ensure all code compiles syntactically flawlessly before submitting to the CI workflow.
