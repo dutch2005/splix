@@ -37,20 +37,20 @@ set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
 #   libraries : /usr/lib/aarch64-linux-gnu/
 #   headers   : /usr/include/aarch64-linux-gnu/
 #
-# We do NOT use CMAKE_SYSROOT here because that expects a traditional
-# chroot-style sysroot layout (/usr/lib, /usr/include).  Debian multiarch
-# uses a flat host tree with arch-specific sub-directories, so we manually
-# indicate those paths via CMAKE_FIND_ROOT_PATH instead.
+# We use CMAKE_FIND_ROOT_PATH to prioritize the arm64 multiarch directories
+# so CMake finds the aarch64 libraries before any host (amd64) libraries.
 set(CMAKE_FIND_ROOT_PATH
     /usr/lib/aarch64-linux-gnu
     /usr/include/aarch64-linux-gnu
 )
 
-# NEVER  : use host tools (cmake, make, pkg-config binary itself) from host
-# ONLY   : use target libraries and headers from CMAKE_FIND_ROOT_PATH
+# PROGRAM : NEVER  - use host tools (cmake, make, pkg-config) from host
+# LIBRARY : BOTH   - prioritize CMAKE_FIND_ROOT_PATH but allow fallbacks
+# INCLUDE : BOTH   - prioritize CMAKE_FIND_ROOT_PATH but allow /usr/include (where multiarch packages put shared headers)
+# PACKAGE : ONLY   - ensure find_package doesn't cross-contaminate configs
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
 # ── pkg-config Cross-Compilation Override ────────────────────────────────────

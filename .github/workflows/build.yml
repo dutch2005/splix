@@ -71,7 +71,7 @@ jobs:
 
               # ── Base dependencies (same for amd64 and arm64) ──────────────
               apt-get update -y
-              apt-get install -y \
+              apt-get install -y --fix-missing \
                 build-essential cmake \
                 cups libcups2-dev libcupsimage2-dev libjbig-dev \
                 pkg-config ccache checkinstall
@@ -83,7 +83,7 @@ jobs:
               if [ "${DEB_ARCH}" = "arm64" ]; then
                 dpkg --add-architecture arm64
                 apt-get update -y
-                apt-get install -y \
+                apt-get install -y --fix-missing \
                   gcc-aarch64-linux-gnu \
                   g++-aarch64-linux-gnu \
                   libcups2-dev:arm64 \
