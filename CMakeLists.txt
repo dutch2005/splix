@@ -15,44 +15,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_EXTENSIONS        OFF)   # -std=c++11, not -std=gnu++11
 
 # ────────────────────────────────────────────────────────────────────────────
-# Dependency Detection
+# Core Dependencies
 # ────────────────────────────────────────────────────────────────────────────
-# WHY pkg-config instead of find_package(CUPS)?
-#
-# find_package(CUPS) works in two steps:
-#   1. It looks for FindCUPS.cmake (provided by CMake itself).
-#   2. FindCUPS.cmake internally runs the `cups-config` binary to locate
-#      headers and libraries.
-#
-# In a minimal container (e.g. debian:oldstable with only libcups2-dev
-# installed), `cups-config` may not be on PATH or CUPS may not install a
-# CUPSConfig.cmake config file, causing CMake to print the confusing error:
-#   "By not providing FindCUPS.cmake ... Could not find a package
-#    configuration file provided by CUPS"
-#
-# CUPS itself ships a standards-compliant `cups.pc` pkg-config file.
-# Using pkg_check_modules() is therefore the most reliable and portable
-# detection method — it is exactly what the original Makefile used via
-# `pkg-config --cflags cups` and `pkg-config --libs cups`.
+# We use CMake's built-in `FindCups` module because it natively searches 
+# the system paths for cups/cups.h and the libcups library. We specifically
+# avoid `pkg_check_modules` because some older Debian configurations lack
+# the cups.pc file but still provide the library and headers.
 
 find_package(PkgConfig REQUIRED)
 
-# CUPS core: headers, link flags (-lcups) and library dirs.
-#
-# pkg_check_modules reads cups.pc, which is installed by:
-#   BUILD TIME  →  libcups2-dev   (provides cups/cups.h, cups.pc, libcups.so)
-#   RUNTIME     →  cups           (creates /usr/lib/cups/filter/, cupsd daemon)
-#
-# Both packages must be installed for a complete build:
-#   apt-get install cups libcups2-dev
-#
-# The execute_process() calls below use pkg-config to query path variables
-# (cups_serverbin, cups_datadir) that are defined in cups.pc and reflect the
-# layout of the installed `cups` runtime package.  If only libcups2-dev is
-# present without the `cups` package, those paths will be correct strings
-# but the directories may not yet exist on the build host — which is fine
-# for cross-compilation or packaging environments.
-pkg_check_modules(CUPS cups)
+# FindCups provides CUPS_INCLUDE_DIRS and CUPS_LIBRARIES
+find_package(Cups)
 if(NOT CUPS_FOUND)
     message(FATAL_ERROR
         "\n[splix] CUPS development headers not found."
@@ -109,16 +82,37 @@ find_package(Threads REQUIRED)
 # them from the cmake command line without editing this file:
 #   cmake -DSPLIX_FILTER_DIR=/usr/lib/cups/filter ..
 
-execute_process(
-    COMMAND pkg-config --variable=cups_serverbin cups
-    OUTPUT_VARIABLE _CUPS_SERVERBIN
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process(
-    COMMAND pkg-config --variable=cups_datadir cups
-    OUTPUT_VARIABLE _CUPS_DATADIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+find_program(CUPS_CONFIG_EXECUTABLE NAMES cups-config)
+if(CUPS_CONFIG_EXECUTABLE)
+    execute_process(
+        COMMAND ${CUPS_CONFIG_EXECUTABLE} --serverbin
+        OUTPUT_VARIABLE _CUPS_SERVERBIN
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    execute_process(
+        COMMAND ${CUPS_CONFIG_EXECUTABLE} --datadir
+        OUTPUT_VARIABLE _CUPS_DATADIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+else()
+    execute_process(
+        COMMAND pkg-config --variable=cups_serverbin cups
+        OUTPUT_VARIABLE _CUPS_SERVERBIN
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    execute_process(
+        COMMAND pkg-config --variable=cups_datadir cups
+        OUTPUT_VARIABLE _CUPS_DATADIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+endif()
+
+if(NOT _CUPS_SERVERBIN)
+    set(_CUPS_SERVERBIN "/usr/lib/cups")
+endif()
+if(NOT _CUPS_DATADIR)
+    set(_CUPS_DATADIR "/usr/share/cups")
+endif()
 
 set(SPLIX_FILTER_DIR  "${_CUPS_SERVERBIN}/filter"
     CACHE STRING "Directory where CUPS looks for filter binaries")
@@ -146,6 +140,7 @@ message(STATUS "  Profile dir : ${SPLIX_PROFILE_DIR}")
 # Global Include Paths
 # ────────────────────────────────────────────────────────────────────────────
 include_directories(
+    ${CUPS_INCLUDE_DIR}
     ${CUPS_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
