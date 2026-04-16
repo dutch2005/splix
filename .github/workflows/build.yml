@@ -3,7 +3,7 @@ name: Build Splix Drivers
 on:
   push:
     branches: [ master, main ]
-  workflow_dispatch: # Gives you a "Run workflow" button in the GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,13 +12,13 @@ jobs:
     strategy:
       matrix:
         include:
-          # This configures the ARM64 (Raspberry Pi) build
+          # ARM64 (Raspberry Pi) build using Debian Bookworm
           - arch: aarch64
-            distro: debian_latest
+            distro: bookworm
             deb_arch: arm64
-          # This configures the x64 (Standard PC/Server) build
+          # x64 (Standard PC/Server) build using Debian Bookworm
           - arch: x86_64
-            distro: debian_latest
+            distro: bookworm
             deb_arch: amd64
 
     steps:
@@ -39,16 +39,20 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}/artifacts:/artifacts"
             
-          # The exact commands we ran on the Pi, but automated!
+          # Install dependencies, fix linker, and compile
           run: |
             apt-get update -y
             apt-get install -y build-essential libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall
+            
+            # Fix the Debian JBIG linker issue
+            find . -type f -name "*.mk" -exec sed -i 's/-ljbig85/-ljbig/g' {} +
             
             make clean
             make
             make drv
             make ppd
             
+            # Wrap into .deb
             checkinstall -D --install=no --default \
               --pkgname="splix" \
               --pkgversion="2.0.2" \
