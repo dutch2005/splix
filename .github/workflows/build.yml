@@ -19,22 +19,24 @@ jobs:
       fail-fast: false          # let both arches run even if one fails
       matrix:
         include:
-          - platform: linux/amd64
-            deb_arch: amd64
-          - platform: linux/arm64
-            deb_arch: arm64
+          # ── AMD64 (native) ──────────────────────────────────────────────
+          # The container runs natively on the x86-64 GitHub runner.
+          - deb_arch: amd64
+            toolchain_flag: ""
+
+          # ── ARM64 (cross-compiled, NOT QEMU) ───────────────────────────
+          # The container still runs on the x86-64 runner, but uses
+          # aarch64-linux-gnu-g++ to produce ARM64 binaries directly.
+          # This is 5-10× faster than QEMU emulation.
+          - deb_arch: arm64
+            toolchain_flag: "-DCMAKE_TOOLCHAIN_FILE=/workspace/cmake/toolchain-arm64.cmake"
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ARM64 builds run under QEMU because GitHub runners are x86-only.
-      # AMD64 builds skip this step – the container runs natively.
-      - name: Set up QEMU (ARM64 only)
-        if: matrix.deb_arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
-
-      # Persist ccache across runs to speed up subsequent builds.
+      # ccache persists across workflow runs to speed up incremental builds.
+      # The cache key includes the arch so amd64 and arm64 caches don't mix.
       - name: Restore ccache
         uses: actions/cache@v4
         with:
@@ -43,74 +45,86 @@ jobs:
           restore-keys: |
             ccache-cmake-${{ matrix.deb_arch }}-
 
-      # Everything happens inside a Debian oldstable (Bullseye) container so
-      # the resulting binary links against an old-enough glibc to run on most
+      # The entire build runs inside a Debian oldstable (Bullseye) container
+      # so the output binary links against an old-enough glibc to run on most
       # Debian/Ubuntu systems in the field.
+      #
+      # Both amd64 and arm64 use --platform linux/amd64 here — we no longer
+      # need QEMU because the arm64 binary is produced by the cross-compiler,
+      # not by running an emulated arm64 process.
       - name: Build and package inside Debian oldstable
         run: |
           mkdir -p "${PWD}/artifacts" "${PWD}/.ccache"
 
           docker run --rm \
-            --platform ${{ matrix.platform }} \
+            --platform linux/amd64 \
             -v "${PWD}:/workspace" \
             -v "${PWD}/.ccache:/root/.ccache" \
             -w /workspace \
             -e CCACHE_DIR=/root/.ccache \
+            -e DEB_ARCH="${{ matrix.deb_arch }}" \
+            -e TOOLCHAIN_FLAG="${{ matrix.toolchain_flag }}" \
             debian:oldstable \
             bash -c '
               set -euo pipefail
 
-              # ── Dependencies ──────────────────────────────────────────────
+              # ── Base dependencies (same for amd64 and arm64) ──────────────
               apt-get update -y
               apt-get install -y \
                 build-essential cmake \
-                cups libcups2 libcupsimage2 \
-                libcups2-dev libcupsimage2-dev \
-                libjbig-dev \
-                pkg-config \
-                ccache \
-                checkinstall
+                cups libcups2-dev libcupsimage2-dev libjbig-dev \
+                pkg-config ccache checkinstall
+
+              # ── ARM64 cross-compilation dependencies ───────────────────────
+              # These are only installed for the arm64 matrix entry.
+              # The cross-compiler produces ARM64 binaries on the native x86-64
+              # runner — no QEMU emulation involved during compilation.
+              if [ "${DEB_ARCH}" = "arm64" ]; then
+                dpkg --add-architecture arm64
+                apt-get update -y
+                apt-get install -y \
+                  gcc-aarch64-linux-gnu \
+                  g++-aarch64-linux-gnu \
+                  libcups2-dev:arm64 \
+                  libcupsimage2-dev:arm64 \
+                  libjbig-dev:arm64
+              fi
 
               # Put ccache wrappers first so they intercept gcc/g++ calls.
+              # For cross-compilation ccache transparently wraps the cross-compiler.
               export PATH="/usr/lib/ccache:${PATH}"
 
-              # ── CMake configure + build ───────────────────────────────────
-              # Build in an out-of-tree directory so source stays clean.
+              # ── CMake configure + build ────────────────────────────────────
               rm -rf /tmp/splix-build
               mkdir  /tmp/splix-build
 
+              # TOOLCHAIN_FLAG is empty for amd64, set for arm64.
               cmake \
                 -S /workspace \
                 -B /tmp/splix-build \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                ${TOOLCHAIN_FLAG}
 
               cmake --build /tmp/splix-build --parallel "$(nproc)"
 
-              # ── Package as .deb ───────────────────────────────────────────
-              # Generate a simple install script that checkinstall will wrap.
-              # We install from the CMake build dir into DESTDIR so that
-              # checkinstall can intercept the file list.  The package then
-              # contains exactly what "cmake --install" would place on disk.
+              # ── Package as .deb ────────────────────────────────────────────
               mkdir -p /tmp/splix-install
-
-              # Run cmake --install into a staging area first to generate the
-              # file list; then hand the same install command to checkinstall.
               cd /tmp/splix-build
 
               checkinstall \
                 -D --install=no --default \
                 --pkgname="splix" \
-                --pkgversion="${{ github.ref_name == '' && '2.0.2' || github.ref_name }}" \
+                --pkgversion="${{ github.ref_name == '\'''\'' && '\''2.0.2'\'' || github.ref_name }}" \
                 --maintainer="github-actions@noreply.github.com" \
-                --pkgarch="${{ matrix.deb_arch }}" \
+                --pkgarch="${DEB_ARCH}" \
                 --requires="cups, libcups2, libcupsimage2, libjbig0" \
                 --nodoc \
                 cmake --install . --prefix="" --destdir /tmp/splix-install
 
-              # Use find instead of a glob so the shell does not expand *.deb
-              # before the file actually exists (the bug in the original code).
+              # Use find instead of glob — the glob expands before the .deb
+              # is written, causing the original workflows to silently fail.
               find /tmp/splix-build -maxdepth 1 -name "*.deb" \
                    -exec cp -v {} /workspace/artifacts/ \;
 
@@ -123,10 +137,10 @@ jobs:
         with:
           name: splix-deb-${{ matrix.deb_arch }}
           path: artifacts/*.deb
-          if-no-files-found: error   # fail loudly if packaging produced nothing
+          if-no-files-found: error
 
-      # On version tags (e.g. v2.0.2) attach both .deb files to the
-      # GitHub Release that was created for that tag.
+      # On version tags (e.g. v2.0.2) attach both .deb files to the GitHub
+      # Release created for that tag.
       - name: Attach to GitHub Release (version tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

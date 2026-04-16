@@ -8,12 +8,13 @@ how to build SpliX locally or understand what the CI pipeline does.
 ## Table of Contents
 
 1. [Quick Start (Local Build)](#quick-start)
-2. [What Changed and Why](#what-changed-and-why)
-3. [File-by-File Change Log](#file-by-file-change-log)
-4. [CMake Variable Reference](#cmake-variable-reference)
-5. [CI / GitHub Actions](#ci--github-actions)
-6. [PPD File Map (Brand → Directory)](#ppd-file-map)
-7. [Troubleshooting](#troubleshooting)
+2. [Cross-Compilation (ARM64)](#cross-compilation-arm64)
+3. [What Changed and Why](#what-changed-and-why)
+4. [File-by-File Change Log](#file-by-file-change-log)
+5. [CMake Variable Reference](#cmake-variable-reference)
+6. [CI / GitHub Actions](#ci--github-actions)
+7. [PPD File Map (Brand → Directory)](#ppd-file-map)
+8. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -24,10 +25,13 @@ how to build SpliX locally or understand what the CI pipeline does.
 ```bash
 # Debian / Ubuntu
 sudo apt-get install \
-    build-essential cmake \
-    libcups2-dev libcupsimage2-dev \
-    libjbig-dev pkg-config
+    build-essential cmake pkg-config \
+    cups \           # runtime: creates /usr/lib/cups/filter/, needed for path queries
+    libcups2-dev \   # build: cups/cups.h headers + cups.pc for pkg-config
+    libcupsimage2-dev \
+    libjbig-dev
 ```
+
 
 ### Build
 
@@ -57,7 +61,56 @@ cmake -S . -B build \
 
 ---
 
-## What Changed and Why
+## Cross-Compilation (ARM64)
+
+CMake supports cross-compilation natively via **toolchain files**.  A toolchain
+file tells CMake which compiler to use and where the target system's libraries
+live.  The cross-compiler builds ARM64 binaries directly on the x86-64 host —
+no QEMU emulation required.
+
+**Why this matters:** QEMU emulation of ARM64 on x86-64 takes 15-25 minutes
+for a cold build.  Native cross-compilation takes 2-5 minutes.
+
+### Prerequisites (install once)
+
+```bash
+# Enable ARM64 multiarch so apt can install :arm64 packages
+sudo dpkg --add-architecture arm64
+sudo apt-get update
+
+# Cross-compiler and ARM64 development libraries
+sudo apt-get install \
+    gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+    libcups2-dev:arm64 libcupsimage2-dev:arm64 libjbig-dev:arm64
+```
+
+### Build for ARM64
+
+```bash
+cmake -S . -B build-arm64 \
+      -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm64.cmake \
+      -DCMAKE_BUILD_TYPE=Release
+cmake --build build-arm64 --parallel
+```
+
+### How `cmake/toolchain-arm64.cmake` works
+
+| Setting | Value | Purpose |
+|---|---|---|
+| `CMAKE_C_COMPILER` | `aarch64-linux-gnu-gcc` | Cross-compiler binary |
+| `CMAKE_CXX_COMPILER` | `aarch64-linux-gnu-g++` | Cross-compiler binary |
+| `CMAKE_FIND_ROOT_PATH` | `/usr/lib/aarch64-linux-gnu` | Where to find ARM64 libraries |
+| `CMAKE_FIND_ROOT_PATH_MODE_LIBRARY` | `ONLY` | Never fall back to host libraries |
+| `PKG_CONFIG_LIBDIR` (env) | `/usr/lib/aarch64-linux-gnu/pkgconfig` | Makes pkg-config query ARM64 `.pc` files |
+
+The toolchain file is processed **before** `CMakeLists.txt`, so the
+`PKG_CONFIG_LIBDIR` override is in effect when `pkg_check_modules(CUPS ...)`
+and the `execute_process(pkg-config --variable=...)` calls run.  CUPS install
+paths (`/usr/lib/cups/filter`, `/usr/share/cups/model`) are architecture-
+independent, so the returned values are correct for both amd64 and arm64.
+
+---
+
 
 ### Old build system: the legacy `Makefile`
 
@@ -195,10 +248,10 @@ older Debian and Ubuntu systems.
 
 ### Matrix
 
-| Arch | Runner | Method |
+| Arch | Runner | Compilation method |
 |---|---|---|
-| `amd64` | `ubuntu-latest` (x86-64) | Native container |
-| `arm64` | `ubuntu-latest` + QEMU | Emulated via `docker/setup-qemu-action` |
+| `amd64` | `ubuntu-latest` (x86-64) | Native container — no emulation |
+| `arm64` | `ubuntu-latest` (x86-64) | **Cross-compiled** via `aarch64-linux-gnu-g++` — no QEMU |
 
 ### Build steps (inside Docker)
 
@@ -245,9 +298,21 @@ in `CMakeLists.txt`.
 
 ## Troubleshooting
 
-### `Could NOT find CUPS`
+### `Could NOT find CUPS` / `Could not find a package configuration file provided by "CUPS"`
 
-Install the development headers: `apt-get install libcups2-dev`
+**Root cause:** `find_package(CUPS REQUIRED)` is the standard CMake call, but
+CUPS does **not** ship a `CUPSConfig.cmake` or `cups-config.cmake` file.
+CMake falls through to Config mode and fails with a misleading error message.
+
+**This is why `CMakeLists.txt` uses `pkg_check_modules(CUPS REQUIRED cups)`
+instead.** CUPS ships a standards-compliant `cups.pc` pkg-config file on
+every Linux distribution. This is also what the original Makefile used.
+
+If you still see this error after the fix, install the pkg-config package:
+
+```bash
+apt-get install pkg-config libcups2-dev
+```
 
 ### `Could not find CUPSIMAGE_LIBRARY`
 
@@ -268,8 +333,11 @@ With the old Makefile, verify `module.mk` still has `src_pstoqpdl_cpp_FLAGS`.
 Check that you `cd` into the CMake build directory **before** running
 `checkinstall`.  The `.deb` is written to the current working directory.
 
-### ARM64 build is very slow
+### ARM64 build is slow / how to speed it up
 
-Expected — it runs under QEMU.  The `--parallel $(nproc)` flag and the
-`ccache` cache warm-up on the second run mitigate this significantly.
-Expect 15–25 minutes for a cold ARM64 build.
+If you are building ARM64 locally without the cross-compiler, consider
+installing `gcc-aarch64-linux-gnu` and using the toolchain file instead
+of running inside a QEMU-emulated container.  See the
+[Cross-Compilation](#cross-compilation-arm64) section above.
+
+In CI, cross-compilation is already the default — no QEMU is used.
