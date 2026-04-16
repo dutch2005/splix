@@ -118,23 +118,24 @@ jobs:
               fi
 
               cd /tmp/splix-build
+              
+              PKG_DIR="/tmp/splix-pkg"
+              mkdir -p "${PKG_DIR}/DEBIAN"
+              
+              cat <<EOF > "${PKG_DIR}/DEBIAN/control"
+Package: splix
+Version: ${PKG_VERSION}
+Architecture: ${DEB_ARCH}
+Maintainer: github-actions@noreply.github.com
+Depends: cups, libcups2, libcupsimage2, libjbig0
+Description: SpliX printer drivers for Samsung and Xerox printers
+EOF
 
-              mkdir -p /usr/lib/cups/filter \
-                       /usr/share/cups/model/samsung \
-                       /usr/share/cups/model/xerox \
-                       /usr/share/cups/model/dell \
-                       /usr/share/cups/model/lexmark \
-                       /usr/share/cups/model/toshiba
-
-              checkinstall \
-                -D --install=no --default \
-                --pkgname="splix" \
-                --pkgversion="${PKG_VERSION}" \
-                --maintainer="github-actions@noreply.github.com" \
-                --pkgarch="${DEB_ARCH}" \
-                --requires="cups, libcups2, libcupsimage2, libjbig0" \
-                --nodoc \
-                make install
+              # Use native DESTDIR support heavily favoured by CMake Makefiles
+              make DESTDIR="${PKG_DIR}" install
+              
+              # Build the package securely without LD_PRELOAD intercept bugs
+              dpkg-deb --build "${PKG_DIR}" "/workspace/artifacts/splix-ubuntu-${PKG_VERSION}-${DEB_ARCH}.deb"
 
               # Use find instead of glob — the glob expands before the .deb
               # is written, causing the original workflows to silently fail.
