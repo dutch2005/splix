@@ -5,41 +5,29 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
-jobs:
-  build:
-    name: Build for ${{ matrix.deb_arch }}
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          # ARM64 (Raspberry Pi) build using Debian Bookworm
-          - arch: aarch64
-            distro: bookworm
-            deb_arch: arm64
-          # x64 (Standard PC/Server) build using Debian Bookworm
-          - arch: x86_64
-            distro: bookworm
-            deb_arch: amd64
+env:
+  # Silences the deprecation warnings by forcing the use of the new Node 24 runtime
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+jobs:
+  build-arm64:
+    name: Build for Raspberry Pi (arm64)
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Compile and Build .deb inside emulated environment
+      - name: Compile and Build inside ARM64 emulator
         uses: uraimo/run-on-arch-action@v2
-        id: build
         with:
-          arch: ${{ matrix.arch }}
-          distro: ${{ matrix.distro }}
+          arch: aarch64
+          # Bullseye is fully supported by the emulator and forward-compatible with Bookworm
+          distro: bullseye
           githubToken: ${{ github.token }}
-          
-          # Create a shared folder to extract the finished .deb file
           setup: |
             mkdir -p "${PWD}/artifacts"
           dockerRunArgs: |
             --volume "${PWD}/artifacts:/artifacts"
-            
-          # Install dependencies, fix linker, and compile
           run: |
             apt-get update -y
             apt-get install -y build-essential libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall
@@ -52,19 +40,53 @@ jobs:
             make drv
             make ppd
             
-            # Wrap into .deb
             checkinstall -D --install=no --default \
               --pkgname="splix" \
               --pkgversion="2.0.2" \
               --maintainer="github-actions" \
-              --pkgarch="${{ matrix.deb_arch }}" \
+              --pkgarch="arm64" \
               --requires="cups, libcups2, libcupsimage2, libjbig0" \
               make install
               
             cp *.deb /artifacts/
 
-      - name: Upload .deb Artifacts
+      - name: Upload arm64 Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: splix-deb-${{ matrix.deb_arch }}
+          name: splix-deb-arm64
+          path: artifacts/*.deb
+
+  build-amd64:
+    name: Build for PC/Server (amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Compile and Build natively via Docker Container
+        run: |
+          mkdir -p "${PWD}/artifacts"
+          # Run a native Debian container directly instead of using the emulator
+          docker run --rm -v "${PWD}:/workspace" -w /workspace debian:bullseye bash -c "
+            apt-get update -y && \
+            apt-get install -y build-essential libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall && \
+            find . -type f -name '*.mk' -exec sed -i 's/-ljbig85/-ljbig/g' {} + && \
+            make clean && \
+            make && \
+            make drv && \
+            make ppd && \
+            checkinstall -D --install=no --default \
+              --pkgname='splix' \
+              --pkgversion='2.0.2' \
+              --maintainer='github-actions' \
+              --pkgarch='amd64' \
+              --requires='cups, libcups2, libcupsimage2, libjbig0' \
+              make install && \
+            cp *.deb /workspace/artifacts/
+          "
+
+      - name: Upload amd64 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: splix-deb-amd64
           path: artifacts/*.deb
