@@ -15,23 +15,24 @@ jobs:
     strategy:
       matrix:
         include:
-          # ARM64 (Raspberry Pi)
+          # ARM64 (Raspberry Pi) build configuration
           - platform: linux/arm64
             deb_arch: arm64
-          # x64 (Standard PC/Server)
+            pkg_config_arch: aarch64-linux-gnu
+          # x64 (Standard PC/Server) build configuration
           - platform: linux/amd64
             deb_arch: amd64
+            pkg_config_arch: x86_64-linux-gnu
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # This official action teaches standard Docker how to understand ARM64
       - name: Set up QEMU for ARM emulation
         if: matrix.deb_arch == 'arm64'
         uses: docker/setup-qemu-action@v3
 
-      # Set up GitHub's free caching, uniquely keyed by architecture so ARM and x64 don't mix
+      # Utilizes GitHub's free 10GB caching to store intermediate build files
       - name: Setup Compiler Cache
         uses: actions/cache@v4
         with:
@@ -40,8 +41,8 @@ jobs:
           restore-keys: |
             ccache-${{ matrix.deb_arch }}-
 
-      # Use standard Docker commands with the N-1 'oldstable' strategy and injected caching!
-      - name: Compile and Build natively via Debian Old-Stable
+      # Compiles inside a Debian 'oldstable' container for maximum forward-compatibility
+      - name: Compile and Build via Debian Old-Stable
         run: |
           mkdir -p "${PWD}/artifacts"
           mkdir -p "${PWD}/.ccache"
@@ -54,10 +55,13 @@ jobs:
             debian:oldstable bash -c "
             
             apt-get update -y && \
-            apt-get install -y build-essential libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall pkg-config ccache && \
+            apt-get install -y build-essential cups libcups2-dev libcupsimage2-dev libjbig-dev cups-ppdc recode checkinstall pkg-config ccache && \
             
+            # Dynamically set PKG_CONFIG_PATH based on the matrix architecture
+            export PKG_CONFIG_PATH=\"/usr/lib/${{ matrix.pkg_config_arch }}/pkgconfig:/usr/lib/pkgconfig:\$PKG_CONFIG_PATH\" && \
             export PATH=\"/usr/lib/ccache:\$PATH\" && \
             
+            # Patch the Makefile to use Debian's bundled JBIG library
             find . -type f -name '*.mk' -exec sed -i 's/-ljbig85/-ljbig/g' {} + && \
             
             make clean && \
@@ -65,6 +69,7 @@ jobs:
             make drv && \
             make ppd && \
             
+            # Generate the .deb file with necessary runtime dependencies
             checkinstall -D --install=no --default \
               --pkgname='splix' \
               --pkgversion='2.0.2' \
