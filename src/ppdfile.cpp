@@ -19,9 +19,7 @@
  * 
  */
 #include "ppdfile.h"
-#include <cups/cups.h>
-#include <string.h>
-#include <ctype.h>
+#include <cups/ppd.h>
 #include "errlog.h"
 
 
@@ -40,8 +38,8 @@
  * Constructeur - Destructeur
  * Init - Uninit
  */
-PPDFile::PPDFile() : _dest(nullptr), _dinfo(nullptr), _num_options(0), 
-    _options(nullptr)
+PPDFile::PPDFile() : _dest(nullptr), _dinfo(nullptr), _ppd(nullptr), 
+    _num_options(0), _options(nullptr)
 {
 }
 
@@ -89,6 +87,14 @@ bool PPDFile::open(const char *file, const char *version, const char *useropts)
         }
     }
 
+    // Direct PPD file loading fallback
+    if (file) {
+        _ppd = ppdOpenFile(file);
+        if (!_ppd) {
+            ERRORMSG(_("Cannot open PPD file %s: %s"), file, cupsLastErrorString());
+        }
+    }
+
     // Parse user options
     _num_options = cupsParseOptions(useropts, 0, &_options);
 
@@ -114,6 +120,10 @@ void PPDFile::close()
         cupsFreeDests(1, _dest);
         _dest = nullptr;
     }
+    if (_ppd) {
+        ppdClose(_ppd);
+        _ppd = nullptr;
+    }
     if (_options) {
         cupsFreeOptions(_num_options, _options);
         _options = nullptr;
@@ -130,20 +140,11 @@ PPDValue PPDFile::get(const char *name, const char *opt)
     const char *valStr = nullptr;
     PPDValue val;
 
-    if (!_dinfo) {
-        // Fallback: search only in job options if destination info is unavailable
-        valStr = cupsGetOption(name, _num_options, _options);
-        if (valStr) {
-            val = valStr;
-        }
-        return val;
-    }
-
     // 1. Search in job-specific options first
     valStr = cupsGetOption(name, _num_options, _options);
 
     // 2. Search in destination info (defaults/attributes)
-    if (!valStr) {
+    if (!valStr && _dinfo) {
         if (opt) {
             // It might be a choice for a specific option
             ipp_attribute_t *attr = cupsFindDestSupported(CUPS_HTTP_DEFAULT, 
@@ -154,12 +155,23 @@ PPDValue PPDFile::get(const char *name, const char *opt)
             }
         } else {
             // Check for general IPP attributes
-            // Search for custom attributes often mapped to cups- prefixed names
-            std::string cupsName = std::string("cups-") + name;
             valStr = cupsGetOption(name, _dest->num_options, _dest->options);
-            if (!valStr)
+            if (!valStr) {
+                std::string cupsName = std::string("cups-") + name;
                 valStr = cupsGetOption(cupsName.c_str(), _dest->num_options, 
                             _dest->options);
+            }
+        }
+    }
+
+    // 3. Fallback to direct PPD file loading
+    if (!valStr && _ppd) {
+        ppd_choice_t *choice = ppdFindMarkedChoice(_ppd, name);
+        if (!choice) {
+            ppd_option_t *option = ppdFindOption(_ppd, name);
+            if (option) valStr = option->defchoice;
+        } else {
+            valStr = choice->choice;
         }
     }
 
@@ -179,13 +191,17 @@ PPDValue PPDFile::getPageSize(const char *name)
     if (cupsGetDestMediaByName(CUPS_HTTP_DEFAULT, _dest, _dinfo, name, 
             CUPS_MEDIA_FLAGS_DEFAULT, &size)) {
         // CUPS size is in 100ths of a millimeter. Convert to points (1/72 inch).
-        // 1 point = 25.4 / 72 mm = 0.352778 mm
-        // points = (mm / 25.4) * 72
         float w = (static_cast<float>(size.width) / 2540.0f) * 72.0f;
         float h = (static_cast<float>(size.length) / 2540.0f) * 72.0f;
         float lm = (static_cast<float>(size.left) / 2540.0f) * 72.0f;
         float bm = (static_cast<float>(size.bottom) / 2540.0f) * 72.0f;
         val.set(w, h, lm, bm);
+    } else if (_ppd) {
+        // Fallback to direct PPD page size resolution
+        ppd_size_t *psize = ppdPageSize(_ppd, name);
+        if (psize) {
+            val.set(psize->width, psize->length, psize->left, psize->bottom);
+        }
     }
 
     return val;

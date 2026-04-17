@@ -94,6 +94,7 @@ class PPDFile
     protected:
         cups_dest_t     *_dest;
         cups_dinfo_t    *_dinfo;
+        ppd_file_t      *_ppd;
         int              _num_options;
         cups_option_t   *_options;
         std::string      _ppdPath;
