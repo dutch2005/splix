@@ -131,7 +131,11 @@ PPDValue PPDFile::get(const char *name, const char *opt)
     PPDValue val;
 
     if (!_dinfo) {
-        ERRORMSG(_("Trying to read printer info which wasn't opened"));
+        // Fallback: search only in job options if destination info is unavailable
+        valStr = cupsGetOption(name, _num_options, _options);
+        if (valStr) {
+            val = valStr;
+        }
         return val;
     }
 
