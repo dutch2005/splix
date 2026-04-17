@@ -28,13 +28,20 @@ export CUPS_DATADIR="/usr/share/cups"
 export PRINTER="splix_test_printer"
 
 # Mock a CUPS destination so cupsGetNamedDest succeeds
+# We mock at both system and user level to be safe
 export HOME="$PWD/temp_home"
 export CUPS_CONFDIR="$PWD/temp_home/cups"
 mkdir -p "$HOME/.cups"
 mkdir -p "$CUPS_CONFDIR"
+mkdir -p /etc/cups 2>/dev/null || true
+
 # Simple format: "dest name" or "Default name"
-echo "dest $PRINTER" > "$HOME/.cups/lpoptions"
+MOCK_CONTENT="dest $PRINTER"
+echo "$MOCK_CONTENT" > "$HOME/.cups/lpoptions"
 echo "Default $PRINTER" > "$CUPS_CONFDIR/lpoptions"
+# Also try standard system paths since we are root in Docker
+echo "$MOCK_CONTENT" > /etc/cups/lpoptions 2>/dev/null || true
+
 export LPDEST="$PRINTER"
 export CUPS_LPDEST="$PRINTER"
 # Prevent libcups from trying to contact a real server
