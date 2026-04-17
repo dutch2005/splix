@@ -178,7 +178,20 @@ PPDValue PPDFile::get(const char *name, const char *opt)
             } else {
                 // Finally, look for attributes (e.g. *QPDL BandSize)
                 ppd_attr_t *attr = ppdFindAttr(_ppd, name, opt);
-                if (attr) valStr = attr->value;
+                if (attr && attr->value) {
+                    valStr = attr->value;
+                    // Attributes in PPD often have quotes, e.g., "128"
+                    // We should strip them so they can be parsed as numbers
+                    if (valStr[0] == '"') {
+                        size_t len = strlen(valStr);
+                        if (len >= 2 && valStr[len-1] == '"') {
+                            std::string unquoted(valStr + 1, len - 2);
+                            val.set(unquoted.c_str());
+                            val.setPreformatted(); // Triggers internal copying/processing
+                            return val;
+                        }
+                    }
+                }
             }
         }
     }
