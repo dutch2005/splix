@@ -41,6 +41,25 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
+### Using CMake Presets (recommended)
+
+The project includes `CMakePresets.json` with ready-made configurations.
+Presets require CMake 3.25+ but the project itself builds with CMake 3.16+.
+
+```bash
+# AMD64 release build
+cmake --preset linux-amd64-release
+cmake --build --preset linux-amd64-release
+
+# ARM64 cross-compiled release build
+cmake --preset linux-arm64-release
+cmake --build --preset linux-arm64-release
+
+# Debug build for development
+cmake --preset linux-debug
+cmake --build --preset linux-debug
+```
+
 ### Install
 
 ```bash
@@ -58,6 +77,20 @@ cmake -S . -B build \
     -DSPLIX_FILTER_DIR=/usr/lib/cups/filter \
     -DSPLIX_PPD_DIR=/usr/share/cups/model
 ```
+
+### Generating `.deb` with CPack
+
+CPack is configured automatically. After building:
+
+```bash
+# Via presets:
+cpack --preset linux-amd64-release
+
+# Or manually:
+cd build && cpack -G DEB
+```
+
+The output is `splix-2.0.2-amd64.deb` (or `arm64`).
 
 ---
 

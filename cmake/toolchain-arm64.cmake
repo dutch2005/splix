@@ -4,6 +4,9 @@
 # Debian/Ubuntu x86-64 (amd64) host.
 #
 # Usage — local build:
+#   cmake --preset linux-arm64-release
+#
+# Or manually:
 #   cmake -S . -B build-arm64 \
 #         -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm64.cmake \
 #         -DCMAKE_BUILD_TYPE=Release
@@ -32,6 +35,15 @@ set(CMAKE_SYSTEM_PROCESSOR aarch64)
 set(CMAKE_C_COMPILER   aarch64-linux-gnu-gcc)
 set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
 
+# ── Optional: QEMU emulator for CTest ────────────────────────────────────────
+# If qemu-aarch64-static is installed, CMake can use it to run ARM64
+# binaries during `ctest`, enabling smoke tests even when cross-compiling.
+# This is entirely optional — tests are skipped if the emulator is absent.
+find_program(_QEMU_ARM64 NAMES qemu-aarch64-static qemu-aarch64)
+if(_QEMU_ARM64)
+    set(CMAKE_CROSSCOMPILING_EMULATOR "${_QEMU_ARM64}")
+endif()
+
 # ── Library / Header Search Paths ────────────────────────────────────────────
 # On Debian/Ubuntu, multiarch arm64 packages install to:
 #   libraries : /usr/lib/aarch64-linux-gnu/
@@ -44,10 +56,13 @@ set(CMAKE_FIND_ROOT_PATH
     /usr/include/aarch64-linux-gnu
 )
 
-# PROGRAM : NEVER  - use host tools (cmake, make, pkg-config) from host
-# LIBRARY : BOTH   - prioritize CMAKE_FIND_ROOT_PATH but allow fallbacks
-# INCLUDE : BOTH   - prioritize CMAKE_FIND_ROOT_PATH but allow /usr/include (where multiarch packages put shared headers)
-# PACKAGE : ONLY   - ensure find_package doesn't cross-contaminate configs
+# Search mode rationale:
+#   PROGRAM : NEVER — use host tools (cmake, make, pkg-config) only
+#   LIBRARY : BOTH  — prioritize arm64 multiarch dirs but allow fallback to
+#                      /usr/lib for architecture-independent libraries
+#   INCLUDE : BOTH  — prioritize arm64 headers but allow /usr/include where
+#                      multiarch packages put shared (arch-independent) headers
+#   PACKAGE : ONLY  — ensure find_package doesn't pick up host x86-64 configs
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY BOTH)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH)

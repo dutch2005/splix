@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.16)
 
 project(splix
     VERSION     2.0.2
@@ -23,19 +22,18 @@ option(DISABLE_BLACKOPTIM "Disable black optimization" OFF)
 set(THREADS "2" CACHE STRING "Number of threads to use")
 set(CACHESIZE "30" CACHE STRING "Cache size in MB")
 
-if(DISABLE_THREADS)
-    add_compile_definitions(DISABLE_THREADS)
-else()
-    add_compile_definitions(THREADS=${THREADS} CACHESIZE=${CACHESIZE})
-endif()
-
-if(DISABLE_JBIG)
-    add_compile_definitions(DISABLE_JBIG)
-endif()
-
-if(DISABLE_BLACKOPTIM)
-    add_compile_definitions(DISABLE_BLACKOPTIM)
-endif()
+# ────────────────────────────────────────────────────────────────────────────
+# Version header generation
+# ────────────────────────────────────────────────────────────────────────────
+# Generate version.h from the template so that the C++ code always matches
+# the CMake project version.  The generated file goes into the build tree;
+# the original include/version.h is kept untouched for users who build with
+# the legacy Makefile.
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/include/version.h"
+    @ONLY
+)
 
 # ────────────────────────────────────────────────────────────────────────────
 # Core Dependencies
@@ -160,32 +158,67 @@ message(STATUS "  DRV dir     : ${SPLIX_DRV_DIR}")
 message(STATUS "  Profile dir : ${SPLIX_PROFILE_DIR}")
 
 # ────────────────────────────────────────────────────────────────────────────
-# Global Include Paths
+# Core Static Library  (splix_core)
 # ────────────────────────────────────────────────────────────────────────────
-include_directories(
+# Every .cpp in src/ that is NOT an entry-point binary; this becomes the
+# shared core that both filter executables link against.
+#
+# Explicit file list (no GLOB) — CMake docs recommend this so that adding
+# or removing a source file always triggers a reconfigure.
+set(SPLIX_CORE_SOURCES
+    src/algo0x0d.cpp
+    src/algo0x0e.cpp
+    src/algo0x11.cpp
+    src/algo0x13.cpp
+    src/algo0x15.cpp
+    src/algorithm.cpp
+    src/band.cpp
+    src/bandplane.cpp
+    src/cache.cpp
+    src/colors.cpp
+    src/compress.cpp
+    src/core.cpp
+    src/document.cpp
+    src/page.cpp
+    src/ppdfile.cpp
+    src/printer.cpp
+    src/qpdl.cpp
+    src/rendering.cpp
+    src/request.cpp
+    src/semaphore.cpp
+)
+
+add_library(splix_core STATIC ${SPLIX_CORE_SOURCES})
+
+# Generated version.h (build dir) takes priority over original (source dir).
+target_include_directories(splix_core PUBLIC
+    ${CMAKE_CURRENT_BINARY_DIR}/include
     ${CUPS_INCLUDE_DIR}
     ${CUPS_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# ────────────────────────────────────────────────────────────────────────────
-# Core Static Library  (splix_core)
-# ────────────────────────────────────────────────────────────────────────────
-# Collect every .cpp in src/ that is NOT an entry-point binary; this becomes
-# the shared core that both filter executables link against.
-file(GLOB SPLIX_CORE_SRC "src/*.cpp")
-list(REMOVE_ITEM SPLIX_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/rastertoqpdl.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/pstoqpdl.cpp"
-)
-
-add_library(splix_core STATIC ${SPLIX_CORE_SRC})
-target_include_directories(splix_core PUBLIC
-    ${CUPS_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
 # Propagate CUPS compile flags (e.g. -D_CUPS_SOURCE) to consumers
 target_compile_options(splix_core PUBLIC ${CUPS_CFLAGS_OTHER})
+
+# Thread/cache/JBIG/blackoptim definitions — scoped to splix_core (and its
+# dependents via PUBLIC) instead of the old global add_compile_definitions().
+if(DISABLE_THREADS)
+    target_compile_definitions(splix_core PUBLIC DISABLE_THREADS)
+else()
+    target_compile_definitions(splix_core PUBLIC
+        THREADS=${THREADS}
+        CACHESIZE=${CACHESIZE}
+    )
+endif()
+
+if(DISABLE_JBIG)
+    target_compile_definitions(splix_core PUBLIC DISABLE_JBIG)
+endif()
+
+if(DISABLE_BLACKOPTIM)
+    target_compile_definitions(splix_core PUBLIC DISABLE_BLACKOPTIM)
+endif()
 
 # ────────────────────────────────────────────────────────────────────────────
 # Binary: rastertoqpdl
@@ -305,3 +338,35 @@ install(
     FILES_MATCHING
         PATTERN "es*.ppd"
 )
+
+# ────────────────────────────────────────────────────────────────────────────
+# Testing (CTest)
+# ────────────────────────────────────────────────────────────────────────────
+enable_testing()
+
+# Smoke tests: verify the binaries exist and print their usage statement.
+# Skipped automatically during cross-compilation (no emulator set).
+if(NOT CMAKE_CROSSCOMPILING)
+    add_test(
+        NAME rastertoqpdl_usage
+        COMMAND rastertoqpdl
+    )
+    set_tests_properties(rastertoqpdl_usage PROPERTIES
+        PASS_REGULAR_EXPRESSION "Usage:"
+        WILL_FAIL TRUE          # binary exits 1 on no-args — that's expected
+    )
+
+    add_test(
+        NAME pstoqpdl_usage
+        COMMAND pstoqpdl
+    )
+    set_tests_properties(pstoqpdl_usage PROPERTIES
+        PASS_REGULAR_EXPRESSION "Usage:"
+        WILL_FAIL TRUE
+    )
+endif()
+
+# ────────────────────────────────────────────────────────────────────────────
+# CPack configuration (generates .deb packages)
+# ────────────────────────────────────────────────────────────────────────────
+include(cmake/SpliXCPack.cmake)

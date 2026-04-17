@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
 echo " [1/4] Installing dependencies..."
@@ -19,44 +20,25 @@ if [ "${DEB_ARCH:-amd64}" = "arm64" ]; then
     libcups2-dev:arm64 \
     libcupsimage2-dev:arm64 \
     libjbig-dev:arm64 > /dev/null
-    TOOLCHAIN_FLAG="-DCMAKE_TOOLCHAIN_FILE=/workspace/cmake/toolchain-arm64.cmake"
+    CMAKE_PRESET="ci-arm64"
 else
-    TOOLCHAIN_FLAG=""
+    CMAKE_PRESET="ci-amd64"
 fi
 
 echo " [2/4] Configuring CMake..."
 rm -rf /tmp/splix-build
-mkdir  /tmp/splix-build
-
-cmake \
-    -S /workspace \
-    -B /tmp/splix-build \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-    ${TOOLCHAIN_FLAG} > /dev/null
+cmake --preset "${CMAKE_PRESET}"
 
 echo " [3/4] Compiling..."
-cmake --build /tmp/splix-build --parallel "$(nproc)" > /dev/null
+cmake --build --preset "${CMAKE_PRESET}"
 
-echo " [4/4] Generating Debian Package (.deb)..."
-PKG_VERSION="${GITHUB_REF_NAME:-2.0.2}"
+echo " [4/4] Generating Debian Package (.deb) via CPack..."
 cd /tmp/splix-build
+cpack -G DEB
 
-PKG_DIR="/tmp/splix-pkg"
-mkdir -p "${PKG_DIR}/DEBIAN"
-
-echo "Package: splix" > "${PKG_DIR}/DEBIAN/control"
-echo "Version: ${PKG_VERSION}" >> "${PKG_DIR}/DEBIAN/control"
-echo "Architecture: ${DEB_ARCH:-amd64}" >> "${PKG_DIR}/DEBIAN/control"
-echo "Maintainer: github-actions@noreply.github.com" >> "${PKG_DIR}/DEBIAN/control"
-echo "Depends: cups, libcups2, libcupsimage2, libjbig0" >> "${PKG_DIR}/DEBIAN/control"
-echo "Description: SpliX printer drivers for Samsung and Xerox printers" >> "${PKG_DIR}/DEBIAN/control"
-
-make DESTDIR="${PKG_DIR}" install > /dev/null
-dpkg-deb --build "${PKG_DIR}" "/workspace/artifacts/splix-ubuntu-${PKG_VERSION}-${DEB_ARCH:-amd64}.deb"
+cp -v /tmp/splix-build/*.deb /workspace/artifacts/
 
 echo "=================================================="
-echo " ??? SUCCESS! Package generated securely."
+echo " ✅ SUCCESS! Package generated."
 echo "=================================================="
 ls -l /workspace/artifacts/

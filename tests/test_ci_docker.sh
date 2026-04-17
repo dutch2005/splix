@@ -19,10 +19,10 @@ mkdir -p artifacts
 mkdir -p .ccache
 
 if [ "$TARGET_ARCH" = "arm64" ]; then
-    TOOLCHAIN_FLAG="-DCMAKE_TOOLCHAIN_FILE=/workspace/cmake/toolchain-arm64.cmake"
+    CMAKE_PRESET="ci-arm64"
 else
     TARGET_ARCH="amd64"
-    TOOLCHAIN_FLAG=""
+    CMAKE_PRESET="ci-amd64"
 fi
 
 echo ">> Spawning debian:oldstable container... (This may take a minute)"
@@ -34,7 +34,7 @@ docker run --rm \
   -w /workspace \
   -e CCACHE_DIR=/root/.ccache \
   -e DEB_ARCH="${TARGET_ARCH}" \
-  -e TOOLCHAIN_FLAG="${TOOLCHAIN_FLAG}" \
+  -e CMAKE_PRESET="${CMAKE_PRESET}" \
   -e GITHUB_REF_NAME="2.0.2" \
   debian:oldstable \
   bash -c '
@@ -63,39 +63,21 @@ docker run --rm \
 
     echo " [2/4] Configuring CMake..."
     rm -rf /tmp/splix-build
-    mkdir  /tmp/splix-build
-
-    cmake \
-      -S /workspace \
-      -B /tmp/splix-build \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-      -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-      ${TOOLCHAIN_FLAG} > /dev/null
+    cmake --preset "${CMAKE_PRESET}"
 
     echo " [3/4] Compiling..."
-    cmake --build /tmp/splix-build --parallel "$(nproc)" > /dev/null
+    cmake --build --preset "${CMAKE_PRESET}"
 
-    echo " [4/4] Generating Debian Package (.deb)..."
-    PKG_VERSION="${GITHUB_REF_NAME:-2.0.2}"
+    echo " [4/4] Generating Debian Package (.deb) via CPack..."
     cd /tmp/splix-build
-    
-    PKG_DIR="/tmp/splix-pkg"
-    mkdir -p "${PKG_DIR}/DEBIAN"
-    
-    echo "Package: splix" > "${PKG_DIR}/DEBIAN/control"
-    echo "Version: ${PKG_VERSION}" >> "${PKG_DIR}/DEBIAN/control"
-    echo "Architecture: ${DEB_ARCH}" >> "${PKG_DIR}/DEBIAN/control"
-    echo "Maintainer: github-actions@noreply.github.com" >> "${PKG_DIR}/DEBIAN/control"
-    echo "Depends: cups, libcups2, libcupsimage2, libjbig0" >> "${PKG_DIR}/DEBIAN/control"
-    echo "Description: SpliX printer drivers for Samsung and Xerox printers" >> "${PKG_DIR}/DEBIAN/control"
+    cpack -G DEB
 
-    make DESTDIR="${PKG_DIR}" install > /dev/null
-    dpkg-deb --build "${PKG_DIR}" "/workspace/artifacts/splix-ubuntu-${PKG_VERSION}-${DEB_ARCH}.deb" > /dev/null
+    cp -v /tmp/splix-build/*.deb /workspace/artifacts/
 
     echo "=================================================="
-    echo " ✅ SUCCESS! Package generated securely."
+    echo " ✅ SUCCESS! Package generated."
     echo "=================================================="
+    ls -lh /workspace/artifacts/
   '
 
 echo "Check your local /artifacts directory for the generated .deb file!"

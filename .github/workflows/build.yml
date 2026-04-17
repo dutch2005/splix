@@ -22,14 +22,14 @@ jobs:
           # ── AMD64 (native) ──────────────────────────────────────────────
           # The container runs natively on the x86-64 GitHub runner.
           - deb_arch: amd64
-            toolchain_flag: ""
+            cmake_preset: ci-amd64
 
           # ── ARM64 (cross-compiled, NOT QEMU) ───────────────────────────
           # The container still runs on the x86-64 runner, but uses
           # aarch64-linux-gnu-g++ to produce ARM64 binaries directly.
           # This is 5-10× faster than QEMU emulation.
           - deb_arch: arm64
-            toolchain_flag: "-DCMAKE_TOOLCHAIN_FILE=/workspace/cmake/toolchain-arm64.cmake"
+            cmake_preset: ci-arm64
 
     steps:
       - name: Checkout code
@@ -63,7 +63,7 @@ jobs:
             -w /workspace \
             -e CCACHE_DIR=/root/.ccache \
             -e DEB_ARCH="${{ matrix.deb_arch }}" \
-            -e TOOLCHAIN_FLAG="${{ matrix.toolchain_flag }}" \
+            -e CMAKE_PRESET="${{ matrix.cmake_preset }}" \
             -e GITHUB_REF_NAME="${{ github.ref_name }}" \
             debian:oldstable \
             bash -c '
@@ -74,7 +74,7 @@ jobs:
               apt-get install -y --fix-missing \
                 build-essential cmake \
                 cups libcups2-dev libcupsimage2-dev libjbig-dev \
-                pkg-config ccache checkinstall
+                pkg-config ccache
 
               # ── ARM64 cross-compilation dependencies ───────────────────────
               # These are only installed for the arm64 matrix entry.
@@ -97,48 +97,16 @@ jobs:
 
               # ── CMake configure + build ────────────────────────────────────
               rm -rf /tmp/splix-build
-              mkdir  /tmp/splix-build
 
-              # TOOLCHAIN_FLAG is empty for amd64, set for arm64.
-              cmake \
-                -S /workspace \
-                -B /tmp/splix-build \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-                ${TOOLCHAIN_FLAG}
+              cmake --preset "${CMAKE_PRESET}"
+              cmake --build --preset "${CMAKE_PRESET}"
 
-              cmake --build /tmp/splix-build --parallel "$(nproc)"
-
-              # ── Package as .deb ────────────────────────────────────────────
-              # Fallback to 2.0.2 if this is not a tagged release
-              PKG_VERSION="${GITHUB_REF_NAME:-2.0.2}"
-              if [ "${PKG_VERSION}" = "" ] || [ "${PKG_VERSION}" = "master" ] || [ "${PKG_VERSION}" = "main" ]; then
-                PKG_VERSION="2.0.2"
-              fi
-
+              # ── Package as .deb via CPack ──────────────────────────────────
               cd /tmp/splix-build
-              
-              PKG_DIR="/tmp/splix-pkg"
-              mkdir -p "${PKG_DIR}/DEBIAN"
-              
-              echo "Package: splix" > "${PKG_DIR}/DEBIAN/control"
-              echo "Version: ${PKG_VERSION}" >> "${PKG_DIR}/DEBIAN/control"
-              echo "Architecture: ${DEB_ARCH}" >> "${PKG_DIR}/DEBIAN/control"
-              echo "Maintainer: github-actions@noreply.github.com" >> "${PKG_DIR}/DEBIAN/control"
-              echo "Depends: cups, libcups2, libcupsimage2, libjbig0" >> "${PKG_DIR}/DEBIAN/control"
-              echo "Description: SpliX printer drivers for Samsung and Xerox printers" >> "${PKG_DIR}/DEBIAN/control"
+              cpack -G DEB
 
-              # Use native DESTDIR support heavily favoured by CMake Makefiles
-              make DESTDIR="${PKG_DIR}" install
-              
-              # Build the package securely without LD_PRELOAD intercept bugs
-              dpkg-deb --build "${PKG_DIR}" "/workspace/artifacts/splix-ubuntu-${PKG_VERSION}-${DEB_ARCH}.deb"
-
-              # Use find instead of glob — the glob expands before the .deb
-              # is written, causing the original workflows to silently fail.
-              find /tmp/splix-build -maxdepth 1 -name "*.deb" \
-                   -exec cp -v {} /workspace/artifacts/ \;
+              # Copy the generated .deb to the artifacts directory
+              cp -v /tmp/splix-build/*.deb /workspace/artifacts/
 
               echo "── Packaged artifacts ──────────────────────────────"
               ls -lh /workspace/artifacts/
