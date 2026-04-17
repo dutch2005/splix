@@ -208,7 +208,7 @@ set(SPLIX_CORE_SOURCES
 
 add_library(splix_core STATIC ${SPLIX_CORE_SOURCES})
 splix_apply_hardening(splix_core)
-target_link_libraries(splix_core PRIVATE Threads::Threads)
+target_link_libraries(splix_core PUBLIC Cups::Cups Threads::Threads)
 
 # Generated version.h (build dir) takes priority over original (source dir).
 target_include_directories(splix_core PUBLIC
@@ -364,25 +364,27 @@ install(
 enable_testing()
 
 # ── Google Test Integration ──────────────────────────────────────────────────
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG        v1.14.0
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+if(NOT CMAKE_CROSSCOMPILING)
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      GIT_REPOSITORY https://github.com/google/googletest.git
+      GIT_TAG        v1.14.0
+    )
+    # For Windows: Prevent overriding the parent project's compiler/linker settings
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
 
-add_executable(splix_gtest tests/splix_gtest.cpp)
-target_link_libraries(splix_gtest PRIVATE 
-    splix_core
-    GTest::gtest_main
-)
-target_include_directories(splix_gtest PRIVATE src) # for access to internal headers if needed
+    add_executable(splix_gtest tests/splix_gtest.cpp)
+    target_link_libraries(splix_gtest PRIVATE 
+        splix_core
+        GTest::gtest_main
+    )
+    target_include_directories(splix_gtest PRIVATE src) # for access to internal headers if needed
 
-include(GoogleTest)
-gtest_discover_tests(splix_gtest)
+    include(GoogleTest)
+    gtest_discover_tests(splix_gtest)
+endif()
 
 # ── Status and Smoke Tests ───────────────────────────────────────────────────
 # Smoke tests: verify the binaries exist and print their usage statement.
