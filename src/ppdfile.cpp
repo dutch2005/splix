@@ -177,7 +177,7 @@ PPDValue PPDFile::get(const char *name, const char *opt)
                 valStr = option->defchoice;
             } else {
                 // Finally, look for attributes (e.g. *QPDL BandSize)
-                ppd_attr_t *attr = ppdFindAttr(_ppd, name, section);
+                ppd_attr_t *attr = ppdFindAttr(_ppd, name, opt);
                 if (attr) valStr = attr->value;
             }
         }
