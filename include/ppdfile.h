@@ -22,6 +22,7 @@
 #define _PPDFILE_H_
 
 #include <cups/cups.h>
+#include <cups/ppd.h>
 #include <stdlib.h>
 #include <string>
 #include <memory>
