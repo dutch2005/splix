@@ -23,7 +23,8 @@
 
 #ifndef DISABLE_THREADS
 
-#include <pthread.h>
+#include <mutex>
+#include <condition_variable>
 
 /**
  * @brief This class provides the semaphore mechanism.
@@ -31,8 +32,8 @@
 class Semaphore {
     protected:
         unsigned long           _counter;
-        pthread_mutex_t         _lock;
-        pthread_cond_t          _cond;
+        std::mutex              _lock;
+        std::condition_variable _cond;
 
         bool                    _mutex;
 

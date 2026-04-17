@@ -22,6 +22,8 @@
 #define _DOCUMENT_H_
 
 #include <cups/raster.h>
+#include <memory>
+#include <cstdint>
 
 class Page;
 class Request;
@@ -34,10 +36,17 @@ class Request;
   */
 class Document
 {
+    private:
+        struct RasterDeleter {
+            void operator()(cups_raster_t* r) const {
+                if (r) cupsRasterClose(r);
+            }
+        };
+
     protected:
-        cups_raster_t*          _raster;
-        unsigned long           _currentPage;
-        bool                    _lastPage;
+        std::unique_ptr<cups_raster_t, RasterDeleter> _raster;
+        uint32_t                                      _currentPage;
+        bool                                          _lastPage;
 
     public:
         /**
@@ -68,15 +77,17 @@ class Document
           * @param request the request instance
           * @return a @ref Page instance containing the current page.
           */
-        Page*                   getNextRawPage(const Request& request);
+        std::unique_ptr<Page>   getNextRawPage(const Request& request);
         /**
           * @return the number of pages or 0 if its number is not yet known.
           */
-        unsigned long           numberOfPages() const 
+        uint32_t                numberOfPages() const 
                                     {return _lastPage ? _currentPage - 1: 0;}
 };
 
 #endif /* _DOCUMENT_H_ */
+
+/* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 

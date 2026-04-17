@@ -21,6 +21,10 @@
 #ifndef _BANDPLANE_H_
 #define _BANDPLANE_H_
 
+#include <vector>
+#include <memory>
+#include <cstdint>
+
 /**
   * @brief This class contains data related to a band plane.
   *
@@ -28,7 +32,7 @@
 class BandPlane
 {
     public:
-        enum Endian {
+        enum class Endian : uint8_t {
             /** Machine dependant */
             Dependant,
             /** Big endian */
@@ -38,12 +42,11 @@ class BandPlane
         };
 
     protected:
-        unsigned char           _colorNr;
-        unsigned long           _size;
-        unsigned char*          _data;
-        unsigned long           _checksum;
+        uint8_t                 _colorNr;
+        std::vector<uint8_t>    _data;
+        uint32_t                _checksum;
         Endian                  _endian;
-        unsigned char           _compression;
+        uint8_t                 _compression;
 
     public:
         /**
@@ -60,15 +63,12 @@ class BandPlane
           * Set the color number of this plane.
           * @param nr the color number
           */
-        void                    setColorNr(unsigned char nr) {_colorNr = nr;}
+        void                    setColorNr(uint8_t nr) {_colorNr = nr;}
         /**
           * Set the data buffer.
-          * The buffer will be freed during the destruction of this instance.
           * @param data the data buffer
-          * @param size the size of the data
           */
-        void                    setData(unsigned char *data, 
-                                    unsigned long size);
+        void                    setData(std::vector<uint8_t> data);
         /**
           * Set the endian to use.
           * @param endian the endian to use.
@@ -78,21 +78,21 @@ class BandPlane
          * Set the compression algorithm used.
          * @param compression the compression algorithm used.
          */
-        void                    setCompression(unsigned char compression)
+        void                    setCompression(uint8_t compression)
                                     {_compression = compression;}
 
         /**
           * @return the color number.
           */
-        unsigned char           colorNr() const {return _colorNr;}
+        uint8_t                 colorNr() const {return _colorNr;}
         /**
           * @return the data size.
           */
-        unsigned long           dataSize() const {return _size;}
+        size_t                  dataSize() const {return _data.size();}
         /**
           * @return the data.
           */
-        const unsigned char*    data() const {return _data;}
+        const uint8_t*          data() const {return _data.data();}
         /**
           * @return the endian to use.
           */
@@ -100,11 +100,11 @@ class BandPlane
         /**
           * @return the checksum.
           */
-        unsigned long           checksum() const {return _checksum;}
+        uint32_t                checksum() const {return _checksum;}
         /**
          * @return the compression algorithm used.
          */
-        unsigned char           compression() const {return _compression;}
+        uint8_t                 compression() const {return _compression;}
 
     public:
         /**
@@ -120,10 +120,12 @@ class BandPlane
           * @return a bandplane instance if it has been successfully restored. 
           *         Otherwise it returns NULL.
           */
-        static BandPlane*       restoreIntoMemory(int fd);
+        static std::unique_ptr<BandPlane> restoreIntoMemory(int fd);
 };
 
 #endif /* _BANDPLANE_H_ */
+
+/* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 

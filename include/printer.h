@@ -21,6 +21,9 @@
 #ifndef _PRINTER_H_
 #define _PRINTER_H_
 
+#include <string>
+#include <string_view>
+
 class Request;
 
 /**
@@ -31,10 +34,10 @@ class Request;
 class Printer 
 {
     protected:
-        char*                   _manufacturer;
-        char*                   _model;
-        char*                   _beginPJL;
-        char*                   _endPJL;
+        std::string             _manufacturer;
+        std::string             _model;
+        std::string             _beginPJL;
+        std::string             _endPJL;
 
         bool                    _color;
         unsigned long           _qpdlVersion;
@@ -68,6 +71,12 @@ class Printer
           */
         virtual ~Printer();
 
+        // Modern Move and Copy operations (Rule of Five)
+        Printer(const Printer&) = default;
+        Printer& operator=(const Printer&) = default;
+        Printer(Printer&&) noexcept = default;
+        Printer& operator=(Printer&&) noexcept = default;
+
     public:
         /**
           * Load the printer configuration requested.
@@ -98,11 +107,11 @@ class Printer
         /**
           * @return the manufacturer name.
           */
-        const char*             manufacturer() const {return _manufacturer;}
+        std::string_view        manufacturer() const {return _manufacturer;}
         /**
           * @return the model name.
           */
-        const char*             model() const {return _model;}
+        std::string_view        model() const {return _model;}
         /**
           * @return the height of a band.
           */ 

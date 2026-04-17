@@ -21,6 +21,10 @@
 #ifndef _CACHE_H_
 #define _CACHE_H_
 
+#include <memory>
+#include <string>
+#include <cstdint>
+
 class Page;
 
 /**
@@ -51,16 +55,16 @@ extern bool uninitializeCache();
 
 /**
   * Extract the next page (depending on the curernt cache policy)
-  * @return the instance of the page. Otherwise it returns NULL if no page are
-  *         found.
+  * @return the instance of the page. Otherwise it returns empty unique_ptr if 
+  *         no page are found.
   */
-extern Page* getNextPage();
+extern std::unique_ptr<Page> getNextPage();
 
 /**
   * Register a new page in the cache.
   * @param page the page instance to register in the cache
   */
-extern void registerPage(Page* page);
+extern void registerPage(std::unique_ptr<Page> page);
 
 /**
   * Set the new cache policy.
@@ -72,7 +76,7 @@ extern void setCachePolicy(CachePolicy policy);
   * Set the number of pages in the document.
   * @param nr the number of pages
   */
-extern void setNumberOfPages(unsigned long nr);
+extern void setNumberOfPages(uint32_t nr);
 
 
 /**
@@ -81,17 +85,17 @@ extern void setNumberOfPages(unsigned long nr);
   */
 class CacheEntry {
     protected:
-        Page*                   _page;
+        std::unique_ptr<Page>   _page;
         CacheEntry*             _previous;
         CacheEntry*             _next;
-        char*                   _tempFile;
+        std::string             _tempFile;
 
     public:
         /**
           * Initialize the cache entry instance.
           * @param page the page instance associated to this entry.
           */
-        CacheEntry(Page* page);
+        CacheEntry(std::unique_ptr<Page> page);
         /**
           * Destroy the cache entry instance.
           */
@@ -123,9 +127,13 @@ class CacheEntry {
         bool                    restoreIntoMemory();
 
         /**
-          * @return the page instance.
+          * @return the page instance pointer.
           */
-        Page*                   page() const {return _page;}
+        Page*                   page() const {return _page.get();}
+        /**
+          * @return the unique_ptr to the page.
+          */
+        std::unique_ptr<Page>   releasePage();
         /**
           * @return the next instance.
           */
@@ -135,11 +143,11 @@ class CacheEntry {
           */
         CacheEntry*             previous() const {return _previous;}
         /**
-         * @return TRUE if the page is currently swapped on disk. Otherwise
-         *         returns FALSE.
-         */
+          * @return TRUE if the page is currently swapped on disk. Otherwise
+          *         returns FALSE.
+          */
         bool                    isSwapped() const 
-                                    {return _tempFile ? true : false;}
+                                    {return !_tempFile.empty();}
 };
 #endif /* _CACHE_H_ */
 

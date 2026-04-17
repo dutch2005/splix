@@ -20,7 +20,6 @@
  */
 #include <errno.h>
 #include <stdlib.h>
-#include <cups/ppd.h>
 #include <cups/cups.h>
 #include "cache.h"
 #include "errlog.h"

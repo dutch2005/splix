@@ -21,6 +21,10 @@
 #ifndef _ALGORITHM_H_
 #define _ALGORITHM_H_
 
+#include <memory>
+#include <span>
+#include <cstdint>
+
 class Request;
 class BandPlane;
 
@@ -49,11 +53,11 @@ class Algorithm
           * @param data the data to compress
           * @param width the width of the data / band / page
           * @param height the height of the data / band / page
-          * @return a pointer to a @ref BandPlane instance or NULL.
+          * @return a pointer to a @ref BandPlane instance or nullptr.
           */
-        virtual BandPlane*      compress(const Request& request, 
-                                    unsigned char *data, unsigned long width,
-                                    unsigned long height) = 0;
+        virtual std::unique_ptr<BandPlane> compress(const Request& request, 
+                                    std::span<const uint8_t> data, uint32_t width,
+                                    uint32_t height) = 0;
         /**
           * Reverse line and column.
           * the byte at (x=1, y=0) is placed at (x=0, y=1) etc.

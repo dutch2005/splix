@@ -2,10 +2,10 @@ name: Build Splix .deb Packages (CMake)
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, modernized-2026]
     tags: ['v*']
   pull_request:
-    branches: [master, main]
+    branches: [master, main, modernized-2026]
   workflow_dispatch:
 
 env:
@@ -65,7 +65,7 @@ jobs:
             -e DEB_ARCH="${{ matrix.deb_arch }}" \
             -e CMAKE_PRESET="${{ matrix.cmake_preset }}" \
             -e GITHUB_REF_NAME="${{ github.ref_name }}" \
-            debian:oldstable \
+            debian:stable \
             bash -c '
               set -euo pipefail
 
@@ -74,7 +74,7 @@ jobs:
               apt-get install -y --fix-missing \
                 build-essential cmake \
                 cups libcups2-dev libcupsimage2-dev libjbig-dev \
-                pkg-config ccache
+                pkg-config ccache git ca-certificates
 
               # ── ARM64 cross-compilation dependencies ───────────────────────
               # These are only installed for the arm64 matrix entry.
@@ -126,3 +126,35 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*.deb
+
+  # ── Sanitizer Check ────────────────────────────────────────────────────────
+  # Runs the functional test suite under AddressSanitizer and
+  # UndefinedBehaviorSanitizer to catch memory bugs in PRs.
+  security-audit:
+    name: Sanitizer Check (ASan/UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build and Test with Sanitizers
+        run: |
+          docker run --rm \
+            -v "${PWD}:/workspace" \
+            -w /workspace \
+            debian:stable \
+            bash -c '
+              set -euo pipefail
+              apt-get update -y
+              apt-get install -y build-essential cmake cups libcups2-dev \
+                                 libcupsimage2-dev libjbig-dev pkg-config \
+                                 git ca-certificates
+
+              # Configure with ASan preset
+              cmake --preset linux-asan
+              cmake --build --preset linux-asan
+
+              # Run tests (ctest will invoke functional_test.sh)
+              cd build-asan
+              ctest --output-on-failure
+            '

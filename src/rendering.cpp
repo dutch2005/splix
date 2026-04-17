@@ -31,7 +31,7 @@
 
 #ifndef DISABLE_THREADS
 #include <pthread.h>
-#include "semaphore.h"
+#include "sp_semaphore.h"
 
 static Document document;
 static Semaphore _lock;
@@ -44,13 +44,12 @@ static bool _returnState=true;
  */
 static void *_compressPage(void* data)
 {
-    const Request *request = (const Request *)data;
+    const Request *request = static_cast<const Request *>(data);
     bool rotateEvenPages;
-    Page* page;
-
     rotateEvenPages = request->duplex() == Request::ManualLongEdge;
     do {
         // Load the page
+        std::unique_ptr<Page> page;
         {
             _lock.lock();
             page = document.getNextRawPage(*request);
@@ -68,21 +67,21 @@ static void *_compressPage(void* data)
 
         // Apply some colors optimizations
 #ifndef DISABLE_BLACKOPTIM
-        applyBlackOptimization(page);
+        applyBlackOptimization(page.get());
 #endif /* DISABLE_BLACKOPTIM */
 
         // Compress the page
-        if (compressPage(*request, page)) {
+        if (compressPage(*request, page.get())) {
             DEBUGMSG(_("Page %lu has been compressed and is ready for "
-                "rendering"), page->pageNr());
+                "rendering"), static_cast<unsigned long>(page->pageNr()));
         } else {
             ERRORMSG(_("Error while compressing the page. Check the previous "
                 "message. Trying to print the other pages."));
             page->setEmpty();
             _returnState = false;
         }
-        registerPage(page);
-    } while (page);
+        registerPage(std::move(page));
+    } while (true);
 
     DEBUGMSG(_("Compression thread: work done. See ya"));
 
@@ -93,7 +92,7 @@ bool render(Request& request)
 {
     bool manualDuplex=false, checkLastPage=false, lastPage=false;
     pthread_t threads[THREADS];
-    Page *page;
+    std::unique_ptr<Page> page;
 
     // Load the document
     if (!document.load(request)) {
@@ -104,7 +103,7 @@ bool render(Request& request)
 
     // Load the compression threads
     for (unsigned int i=0; i < THREADS; i++) {
-        if (pthread_create(&threads[i], NULL, _compressPage, (void*)&request)) {
+        if (pthread_create(&threads[i], nullptr, _compressPage, static_cast<void*>(&request))) {
             ERRORMSG(_("Cannot load compression threads. Operation aborted."));
             return false;
         }
@@ -141,14 +140,13 @@ bool render(Request& request)
         if (checkLastPage && document.numberOfPages() == page->pageNr())
             lastPage = true;
         if (!page->isEmpty()) {
-            if (!renderPage(request, page, lastPage)) {
+            if (!renderPage(request, page.get(), lastPage)) {
                 ERRORMSG(_("Error while rendering the page. Check the previous "
                     "message. Trying to print the other pages."));
                 _returnState = false;
             }
-            fprintf(stderr, "PAGE: %lu %lu\n", page->pageNr(), page->copiesNr());
+            fprintf(stderr, "PAGE: %lu %lu\n", static_cast<unsigned long>(page->pageNr()), static_cast<unsigned long>(page->copiesNr()));
         }
-        delete page;
         page = getNextPage();
     }
 
@@ -172,7 +170,7 @@ bool render(Request& request)
 bool render(Request& request)
 {
     Document document;
-    Page* page;
+    std::unique_ptr<Page> page;
 
     // Load the document
     if (!document.load(request)) {
@@ -194,17 +192,16 @@ bool render(Request& request)
     // Send each page
     while (page) {
 #ifndef DISABLE_BLACKOPTIM
-        applyBlackOptimization(page);
+        applyBlackOptimization(page.get());
 #endif /* DISABLE_BLACKOPTIM */
-        if (compressPage(request, page)) {
-            if (!renderPage(request, page))
+        if (compressPage(request, page.get())) {
+            if (!renderPage(request, page.get()))
                 ERRORMSG(_("Error while rendering the page. Check the previous "
                             "message. Trying to print the other pages."));
         } else
             ERRORMSG(_("Error while compressing the page. Check the previous "
                 "message. Trying to print the other pages."));
-        fprintf(stderr, "PAGE: %lu %lu\n", page->pageNr(), page->copiesNr());
-        delete page;
+        fprintf(stderr, "PAGE: %lu %lu\n", static_cast<unsigned long>(page->pageNr()), static_cast<unsigned long>(page->copiesNr()));
         page = document.getNextRawPage(request);
     }
 

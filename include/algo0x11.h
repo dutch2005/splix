@@ -22,7 +22,10 @@
 #define _ALGO0X11_H_
 
 #include "algorithm.h"
-#include <inttypes.h>
+#include <vector>
+#include <span>
+#include <memory>
+#include <cstdint>
 
 #define COMPRESS_SAMPLE_RATE    0x800
 #define TABLE_PTR_SIZE          0x40
@@ -42,24 +45,21 @@ class Algo0x11 : public Algorithm
 
     protected:
         static int              __compare(const void *n1, const void *n2);
-        bool                    _lookupBestOccurs(const unsigned char* data,
-                                    unsigned long size);
-        bool                    _compress(const unsigned char *data, 
-                                    unsigned long size, 
-                                    unsigned char* &output, 
-                                    unsigned long &outputSize);
+        bool                    _lookupBestOccurs(std::span<const uint8_t> data);
+        bool                    _compress(std::span<const uint8_t> data, 
+                                    std::vector<uint8_t> &output);
 
     public:
         Algo0x11();
         virtual ~Algo0x11();
 
     public:
-        virtual BandPlane*      compress(const Request& request, 
-                                    unsigned char *data, unsigned long width,
-                                    unsigned long height);
-        virtual bool            reverseLineColumn() {return true;}
-        virtual bool            inverseByte() {return true;}
-        virtual bool            splitIntoBands() {return true;}
+        virtual std::unique_ptr<BandPlane> compress(const Request& request, 
+                                    std::span<const uint8_t> data, uint32_t width,
+                                    uint32_t height) override;
+        virtual bool            reverseLineColumn() override {return true;}
+        virtual bool            inverseByte() override {return true;}
+        virtual bool            splitIntoBands() override {return true;}
 };
 
 #endif /* _ALGO0X11_H_ */

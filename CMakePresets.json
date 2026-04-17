@@ -54,6 +54,23 @@
             }
         },
         {
+            "name": "linux-asan",
+            "displayName": "Linux ASan (Memory Safety)",
+            "description": "Build with AddressSanitizer and UBsan to catch memory bugs",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build-asan",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+                "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
             "name": "ci-amd64",
             "displayName": "CI AMD64",
             "description": "Used by GitHub Actions for AMD64 builds",
@@ -94,6 +111,11 @@
         {
             "name": "linux-debug",
             "configurePreset": "linux-debug",
+            "jobs": 0
+        },
+        {
+            "name": "linux-asan",
+            "configurePreset": "linux-asan",
             "jobs": 0
         },
         {

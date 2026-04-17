@@ -32,23 +32,15 @@
  * Init - Uninit
  */
 Printer::Printer()
+    : _color(false), _qpdlVersion(0), _bandHeight(0), _specialBandWidth(false),
+      _packetSize(0), _paperType(0), _paperSource(0), _paperWidth(0.0f),
+      _paperHeight(0.0f), _unknownByte1(0), _unknownByte2(0), _unknownByte3(0),
+      _pageWidth(0.0f), _pageHeight(0.0f), _hardMarginX(0.0f), _hardMarginY(0.0f)
 {
-    _manufacturer = NULL;
-    _model = NULL;
-    _beginPJL = NULL;
-    _endPJL = NULL;
 }
 
 Printer::~Printer()
 {
-    if (_manufacturer)
-        delete[] _manufacturer;
-    if (_model)
-        delete [] _model;
-    if (_beginPJL)
-        delete [] _beginPJL;
-    if (_endPJL)
-        delete [] _endPJL;
 }
 
 
@@ -71,8 +63,8 @@ bool Printer::loadInformation(const Request& request)
     _specialBandWidth = request.ppd()->get("SpecialBandWidth", "QPDL");
     _packetSize = request.ppd()->get("PacketSize", "QPDL");
     _packetSize *= 1024;
-    _manufacturer = request.ppd()->get("Manufacturer").deepCopy();
-    _model = request.ppd()->get("ModelName").deepCopy();
+    _manufacturer = static_cast<const char*>(request.ppd()->get("Manufacturer"));
+    _model = static_cast<const char*>(request.ppd()->get("ModelName"));
     _color = request.ppd()->get("ColorDevice");
     _qpdlVersion = request.ppd()->get("QPDLVersion", "QPDL");
     if (!_qpdlVersion || (_qpdlVersion > 3 && _qpdlVersion != 5)) {
@@ -85,9 +77,9 @@ bool Printer::loadInformation(const Request& request)
         ERRORMSG(_("Unknown header values. Operation aborted."));
         return false;
     }
-    _unknownByte1 = ((const char *)value)[0];
-    _unknownByte2 = ((const char *)value)[1];
-    _unknownByte3 = ((const char *)value)[2];
+    _unknownByte1 = (static_cast<const char*>(value))[0];
+    _unknownByte2 = (static_cast<const char*>(value))[1];
+    _unknownByte3 = (static_cast<const char*>(value))[2];
 
     // Get PJL information
     value = request.ppd()->get("BeginPJL", "PJL");
@@ -96,14 +88,14 @@ bool Printer::loadInformation(const Request& request)
         ERRORMSG(_("No PJL header found. Operation aborted."));
         return false;
     }
-    _beginPJL = value.deepCopy();
+    _beginPJL = static_cast<const char*>(value);
     value = request.ppd()->get("EndPJL", "PJL");
     value.setPreformatted();
     if (value.isNull()) {
         ERRORMSG(_("No PJL footer found. Operation aborted."));
         return false;
     }
-    _endPJL = value.deepCopy();
+    _endPJL = static_cast<const char*>(value);
 
     // Get the paper information
     paperType = request.ppd()->get("MediaSize");
@@ -179,7 +171,7 @@ bool Printer::loadInformation(const Request& request)
     }
 
     DEBUGMSG(_("%s printer %s with QPDL v. %lu"), _color ? "Color" : 
-        "Monochrome", _model, _qpdlVersion);
+        "Monochrome", _model.c_str(), _qpdlVersion);
 
     return true;
 }
@@ -196,7 +188,7 @@ bool Printer::sendPJLHeader(const Request& request,
     time(&timestamp);
     timeinfo = localtime(&timestamp);
 
-    printf("%s", _beginPJL);
+    printf("%s", _beginPJL.c_str());
 
     if (0x15 == compression) {
         printf("@PJL COMMENT USERNAME=\"Username: %s\"\n", request.userName());
@@ -216,15 +208,11 @@ bool Printer::sendPJLHeader(const Request& request,
    // Set some printer options
     if (!request.ppd()->get("EconoMode").isNull() && 
         request.ppd()->get("EconoMode") != "0")
-        printf("@PJL SET ECONOMODE=%s\n", (const char *)request.ppd()->
-                get("EconoMode"));
-    if (!request.ppd()->get("PowerSave").isNull()) {
-        if (request.ppd()->get("PowerSave") != "False") {
-            printf("@PJL DEFAULT POWERSAVE=ON\n");
-            printf("@PJL DEFAULT POWERSAVETIME=%s\n",
-                (const char *)request.ppd()->get("PowerSave"));
-        } else
-            printf("@PJL DEFAULT POWERSAVE=OFF\n");
+        printf("@PJL SET ECONOMODE=%s\n", static_cast<const char*>(request.ppd()->
+                get("EconoMode")));
+    if (request.ppd()->get("PowerSave")) {
+        printf("@PJL SET POWERSAVE=%s\n", 
+                static_cast<const char*>(request.ppd()->get("PowerSave")));
     }
 
     if (request.ppd()->get("JamRecovery").isTrue())
@@ -275,23 +263,20 @@ bool Printer::sendPJLHeader(const Request& request,
     if (request.ppd()->get("MediaType").isNull())
         printf("@PJL SET PAPERTYPE=OFF\n");
     else
-        printf("@PJL SET PAPERTYPE=%s\n", (const char *)request.ppd()->
-                get("MediaType"));
-    if (request.ppd()->get("Altitude").isNull())
-        printf("@PJL SET ALTITUDE=LOW\n");
-    else
-        printf("@PJL SET ALTITUDE=%s\n", (const char *)request.ppd()->
-                get("Altitude"));
-    if (request.ppd()->get("TonerDensity").isNull())
-        printf("@PJL SET DENSITY=3\n");
-    else
-        printf("@PJL SET DENSITY=%s\n", (const char *)request.ppd()->
-                get("TonerDensity"));
-    if (request.ppd()->get("SRTMode").isNull())
-        printf("@PJL SET RET=NORMAL\n");
-    else
-        printf("@PJL SET RET=%s\n", (const char *)request.ppd()->
-                get("SRTMode"));
+        printf("@PJL SET PAPERTYPE=%s\n", static_cast<const char*>(request.ppd()->
+                get("MediaType")));
+    if (request.ppd()->get("Altitude")) {
+        printf("@PJL SET ALTITUDE=%s\n", static_cast<const char*>(request.ppd()->
+                get("Altitude")));
+    }
+    if (request.ppd()->get("TonerDensity")) {
+        printf("@PJL SET DENSITY=%s\n", static_cast<const char*>(request.ppd()->
+                get("TonerDensity")));
+    }
+    if (request.ppd()->get("SRTMode")) {
+        printf("@PJL SET RET=%s\n", static_cast<const char*>(request.ppd()->
+                get("SRTMode")));
+    }
 
     if (0x15 == compression) {
         printf("@PJL SET BANNERSHEET=%s\n", "OFF");
@@ -304,9 +289,9 @@ bool Printer::sendPJLHeader(const Request& request,
     return true;
 }
 
-bool Printer::sendPJLFooter(const Request& request) const
+bool Printer::sendPJLFooter([[maybe_unused]] const Request& request) const
 {
-    printf("%s", _endPJL);
+    printf("%s", _endPJL.c_str());
     fflush(stdout);
 
     return true;

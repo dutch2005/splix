@@ -28,7 +28,6 @@ fi
 echo ">> Spawning debian:oldstable container... (This may take a minute)"
 
 docker run --rm \
-  --platform linux/amd64 \
   -v "${ROOT_DIR}:/workspace" \
   -v "${ROOT_DIR}/.ccache:/root/.ccache" \
   -w /workspace \
@@ -36,43 +35,25 @@ docker run --rm \
   -e DEB_ARCH="${TARGET_ARCH}" \
   -e CMAKE_PRESET="${CMAKE_PRESET}" \
   -e GITHUB_REF_NAME="2.0.2" \
-  debian:oldstable \
+  splix-builder \
   bash -c '
     set -euo pipefail
 
-    echo " [1/4] Installing dependencies..."
-    apt-get update -y > /dev/null
-    apt-get install -y --fix-missing \
-      build-essential cmake \
-      cups libcups2-dev libcupsimage2-dev libjbig-dev \
-      pkg-config ccache > /dev/null
-
-    if [ "${DEB_ARCH}" = "arm64" ]; then
-      echo "       Installing ARM64 cross-compile toolchain..."
-      dpkg --add-architecture arm64
-      apt-get update -y > /dev/null
-      apt-get install -y --fix-missing \
-        gcc-aarch64-linux-gnu \
-        g++-aarch64-linux-gnu \
-        libcups2-dev:arm64 \
-        libcupsimage2-dev:arm64 \
-        libjbig-dev:arm64 > /dev/null
-    fi
-
-    export PATH="/usr/lib/ccache:${PATH}"
-
-    echo " [2/4] Configuring CMake..."
-    rm -rf /tmp/splix-build
+    echo " [1/3] Configuring CMake..."
+    # Ensure build dir is clean for a fresh cross-compile if needed
+    rm -rf build/
     cmake --preset "${CMAKE_PRESET}"
 
-    echo " [3/4] Compiling..."
+    echo " [2/3] Compiling..."
     cmake --build --preset "${CMAKE_PRESET}"
 
-    echo " [4/4] Generating Debian Package (.deb) via CPack..."
-    cd /tmp/splix-build
+    echo " [3/3] Generating Debian Package (.deb)..."
+    cd build/
     cpack -G DEB
 
-    cp -v /tmp/splix-build/*.deb /workspace/artifacts/
+    # Move to artifacts
+    mkdir -p /workspace/artifacts
+    cp -v /workspace/build/*.deb /workspace/artifacts/
 
     echo "=================================================="
     echo " ✅ SUCCESS! Package generated."

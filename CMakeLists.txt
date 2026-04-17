@@ -9,18 +9,36 @@ project(splix
 # ────────────────────────────────────────────────────────────────────────────
 # C++ Standard
 # ────────────────────────────────────────────────────────────────────────────
-set(CMAKE_CXX_STANDARD          11)
+# We target C++23 to leverage modern memory safety features like std::span,
+# std::expected, and enhanced RAII.
+set(CMAKE_CXX_STANDARD          23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_EXTENSIONS        OFF)   # -std=c++11, not -std=gnu++11
+set(CMAKE_CXX_EXTENSIONS        OFF)
 
 # ────────────────────────────────────────────────────────────────────────────
-# Global Configuration Options
+# Global Configuration Options & Hardening
 # ────────────────────────────────────────────────────────────────────────────
+include(cmake/SpliXHardening.cmake)
 option(DISABLE_JBIG "Disable JBIG compression" OFF)
 option(DISABLE_THREADS "Disable POSIX threads" OFF)
 option(DISABLE_BLACKOPTIM "Disable black optimization" OFF)
 set(THREADS "2" CACHE STRING "Number of threads to use")
 set(CACHESIZE "30" CACHE STRING "Cache size in MB")
+
+# ────────────────────────────────────────────────────────────────────────────
+# Static Analysis & Tooling
+# ────────────────────────────────────────────────────────────────────────────
+find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+if(CLANG_TIDY_EXE)
+    set(CMAKE_CXX_CLANG_TIDY ${CLANG_TIDY_EXE};-checks=-*,readability-*,bugprone-*,modernize-*,cppcoreguidelines-,-cppcoreguidelines-pro-type-member-init,-cppcoreguidelines-pro-type-static-cast-downcast)
+    message(STATUS "Clang-Tidy enabled.")
+endif()
+
+find_program(CPPCHECK_EXE NAMES cppcheck)
+if(CPPCHECK_EXE)
+    set(CMAKE_CXX_CPPCHECK ${CPPCHECK_EXE};--enable=warning,performance,portability,style;--inconclusive;--force)
+    message(STATUS "Cppcheck enabled.")
+endif()
 
 # ────────────────────────────────────────────────────────────────────────────
 # Version header generation
@@ -185,10 +203,12 @@ set(SPLIX_CORE_SOURCES
     src/qpdl.cpp
     src/rendering.cpp
     src/request.cpp
-    src/semaphore.cpp
+    src/sp_semaphore.cpp
 )
 
 add_library(splix_core STATIC ${SPLIX_CORE_SOURCES})
+splix_apply_hardening(splix_core)
+target_link_libraries(splix_core PRIVATE Threads::Threads)
 
 # Generated version.h (build dir) takes priority over original (source dir).
 target_include_directories(splix_core PUBLIC
@@ -226,6 +246,7 @@ endif()
 # Reads raster data from CUPS and writes a QPDL byte-stream to the printer.
 # Links JBIG for the 0x13/0x15 compression algorithms.
 add_executable(rastertoqpdl src/rastertoqpdl.cpp)
+splix_apply_hardening(rastertoqpdl)
 target_link_libraries(rastertoqpdl PRIVATE
     splix_core
     ${CUPS_LIBRARIES}       # -lcups
@@ -246,6 +267,7 @@ target_link_directories(rastertoqpdl PRIVATE ${CUPS_LIBRARY_DIRS})
 #   pstoqpdl.cpp:69: error: 'RASTERDIR' undeclared
 # They replace the src_pstoqpdl_cpp_FLAGS variable in the old module.mk.
 add_executable(pstoqpdl src/pstoqpdl.cpp)
+splix_apply_hardening(pstoqpdl)
 target_compile_definitions(pstoqpdl PRIVATE
     RASTERDIR="${SPLIX_FILTER_DIR}"
     RASTERTOQPDL="rastertoqpdl"
@@ -339,11 +361,30 @@ install(
         PATTERN "es*.ppd"
 )
 
-# ────────────────────────────────────────────────────────────────────────────
-# Testing (CTest)
-# ────────────────────────────────────────────────────────────────────────────
 enable_testing()
 
+# ── Google Test Integration ──────────────────────────────────────────────────
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG        v1.14.0
+)
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+add_executable(splix_gtest tests/splix_gtest.cpp)
+target_link_libraries(splix_gtest PRIVATE 
+    splix_core
+    GTest::gtest_main
+)
+target_include_directories(splix_gtest PRIVATE src) # for access to internal headers if needed
+
+include(GoogleTest)
+gtest_discover_tests(splix_gtest)
+
+# ── Status and Smoke Tests ───────────────────────────────────────────────────
 # Smoke tests: verify the binaries exist and print their usage statement.
 # Skipped automatically during cross-compilation (no emulator set).
 if(NOT CMAKE_CROSSCOMPILING)
@@ -353,7 +394,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     )
     set_tests_properties(rastertoqpdl_usage PROPERTIES
         PASS_REGULAR_EXPRESSION "Usage:"
-        WILL_FAIL TRUE          # binary exits 1 on no-args — that's expected
     )
 
     add_test(
@@ -362,7 +402,13 @@ if(NOT CMAKE_CROSSCOMPILING)
     )
     set_tests_properties(pstoqpdl_usage PROPERTIES
         PASS_REGULAR_EXPRESSION "Usage:"
-        WILL_FAIL TRUE
+    )
+
+    # ── Functional Integration Test ──────────────────────────────────────────
+    # Simulates a real print job by feeding raster data to the filter.
+    add_test(
+        NAME driver_functional_raster
+        COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tests/functional_test.sh" "${CMAKE_CURRENT_BINARY_DIR}"
     )
 endif()
 

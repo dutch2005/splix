@@ -18,7 +18,7 @@
  *  $Id$
  * 
  */
-#include "semaphore.h"
+#include "sp_semaphore.h"
 
 #ifndef DISABLE_THREADS
 
@@ -26,18 +26,18 @@
  * Constructeur - Destructeur
  * Init - Uninit
  */
+/*
+ * Constructeur - Destructeur
+ * Init - Uninit
+ */
 Semaphore::Semaphore()
 {
     _counter = 1;
-    pthread_mutex_init(&_lock, NULL);
-    pthread_cond_init(&_cond, NULL);
 }
 
 Semaphore::Semaphore(unsigned long counter)
 {
     _counter = counter;
-    pthread_mutex_init(&_lock, NULL);
-    pthread_cond_init(&_cond, NULL);
 }
 
 Semaphore::~Semaphore()
@@ -52,12 +52,12 @@ Semaphore::~Semaphore()
  */
 void Semaphore::lock()
 {
-    pthread_mutex_lock(&_lock);
+    _lock.lock();
 }
 
 void Semaphore::unlock()
 {
-    pthread_mutex_unlock(&_lock);
+    _lock.unlock();
 }
 
 
@@ -68,22 +68,18 @@ void Semaphore::unlock()
  */
 Semaphore& Semaphore::operator --(int)
 {
-    pthread_mutex_lock(&_lock);
-    while (!_counter)
-        pthread_cond_wait(&_cond, &_lock);
+    std::unique_lock<std::mutex> lock(_lock);
+    _cond.wait(lock, [this]{ return _counter > 0; });
     _counter--;
-    pthread_mutex_unlock(&_lock);
 
     return *this;
 }
 
 Semaphore& Semaphore::operator ++(int)
 {
-    pthread_mutex_lock(&_lock);
-    if (!_counter)
-        pthread_cond_signal(&_cond);
+    std::lock_guard<std::mutex> lock(_lock);
     _counter++;
-    pthread_mutex_unlock(&_lock);
+    _cond.notify_one();
 
     return *this;
 }

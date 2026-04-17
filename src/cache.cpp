@@ -19,6 +19,10 @@
  * 
  */
 #ifndef DISABLE_THREADS
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
+
 #include "cache.h"
 #include <fcntl.h>
 #include <stdlib.h>
@@ -27,7 +31,7 @@
 #include <errno.h>
 #include "page.h"
 #include "errlog.h"
-#include "semaphore.h"
+#include "sp_semaphore.h"
 
 /*
  * Variables internes
@@ -44,18 +48,18 @@ static unsigned long _lastPageRequested = 0, _pageRequested = 0;
 static Semaphore _pageAvailable(0);
 
 // Document information
-static unsigned long _numberOfPages = 0;
+static uint32_t _numberOfPages = 0;
 
 // Cache variables
-static CacheEntry *_waitingList=NULL, *_lastWaitingList=NULL;
+static CacheEntry *_waitingList = nullptr, *_lastWaitingList = nullptr;
 static Semaphore _waitingListLock;
-static unsigned long _maxPagesInTable = 0, _pagesInTable = 0;
-static CacheEntry **_pages = NULL;
+static uint32_t _pagesInTable = 0;
+static std::vector<std::unique_ptr<CacheEntry>> _pages;
 static Semaphore _pageTableLock;
 
 // Cache in memory variables
-static CacheEntry *_inMemory = NULL, *_inMemoryLast = NULL;
-static unsigned long _pagesInMemory = 0;
+static CacheEntry *_inMemory = nullptr, *_inMemoryLast = nullptr;
+static uint32_t _pagesInMemory = 0;
 
 
 
@@ -157,7 +161,7 @@ static void __manageMemoryCache(CacheEntry *entry)
         if (_inMemoryLast)
             nr = _inMemoryLast->page()->pageNr();
         else
-            nr = _lastPageRequested;
+            nr = static_cast<unsigned int>(_lastPageRequested);
 
         switch (_policy) {
             case EveryPagesIncreasing:
@@ -178,17 +182,17 @@ static void __manageMemoryCache(CacheEntry *entry)
                     nr -= 2;
                 break;
         }
-        if (nr <= _maxPagesInTable && _pages[nr-1]) {
+        if (nr <= _pages.size() && _pages[nr-1]) {
             if (_pages[nr-1]->isSwapped())
                 _pages[nr-1]->restoreIntoMemory();
-            _pages[nr-1]->setNext(NULL);
+            _pages[nr-1]->setNext(nullptr);
             _pages[nr-1]->setPrevious(_inMemoryLast);
             if (_inMemoryLast) {
-                _inMemoryLast->setNext(_pages[nr-1]);
-                _inMemoryLast = _pages[nr-1];
+                _inMemoryLast->setNext(_pages[nr-1].get());
+                _inMemoryLast = _pages[nr-1].get();
             } else {
-                _inMemory = _pages[nr-1];
-                _inMemoryLast = _pages[nr-1];
+                _inMemory = _pages[nr-1].get();
+                _inMemoryLast = _pages[nr-1].get();
             }
             _pagesInMemory++;
             if (nr == _pageRequested)
@@ -200,7 +204,7 @@ static void __manageMemoryCache(CacheEntry *entry)
 
 static void* _cacheControllerThread(void *_exitVar)
 {
-    bool *needToExit = (bool *)_exitVar;
+    bool *needToExit = static_cast<bool *>(_exitVar);
     bool whatToDo = true;
 
     DEBUGMSG(_("Cache controller thread loaded and is waiting for a job"));
@@ -242,7 +246,7 @@ static void* _cacheControllerThread(void *_exitVar)
         if (_waitingList && !(_pagesInMemory == CACHESIZE || 
             _pagesInMemory == _pagesInTable)) {
             preloadPage = whatToDo;
-            whatToDo = ~whatToDo;
+            whatToDo = !whatToDo;
         // One of the two thing to do
         } else
             preloadPage = (_waitingList == NULL);
@@ -274,26 +278,12 @@ static void* _cacheControllerThread(void *_exitVar)
                 _pageTableLock.lock();
 
                 // Resize the page table if needed
-                while (entry->page()->pageNr() > _maxPagesInTable) {
-                    if (!_maxPagesInTable) {
-                        _maxPagesInTable = CACHESIZE;
-                        _pages = new CacheEntry*[_maxPagesInTable];
-                        memset(_pages, 0, _maxPagesInTable * 
-                            sizeof(CacheEntry*));
-                    } else {
-                        CacheEntry** tmp = new CacheEntry*[_maxPagesInTable*10];
-                        memcpy(tmp, _pages, _maxPagesInTable *
-                            sizeof(CacheEntry*));
-                        memset(tmp + _maxPagesInTable, 0, _maxPagesInTable * 9 *
-                            sizeof(CacheEntry*));
-                        delete[] _pages;
-                        _pages = tmp;
-                        _maxPagesInTable *= 10;
-                    }
+                if (entry->page()->pageNr() > _pages.size()) {
+                    _pages.resize(entry->page()->pageNr());
                 }
 
                 // Store the page in the table
-                _pages[entry->page()->pageNr() - 1] = entry;
+                _pages[entry->page()->pageNr() - 1] = std::unique_ptr<CacheEntry>(entry);
                 _pageTableLock.unlock();
             }
             _pagesInTable++;
@@ -327,7 +317,7 @@ bool initializeCache()
 {
     // Load the cache controller thread
     if (pthread_create(&_cacheThread, NULL, _cacheControllerThread, 
-        (void *)&_stopCacheControllerThread)) {
+        static_cast<void *>(&_stopCacheControllerThread))) {
         ERRORMSG(_("Cannot load the cache controller thread. Operation "
             "aborted."));
         return false;
@@ -352,14 +342,13 @@ bool uninitializeCache()
     }
  
     // Check if all pages has been read. Otherwise free them
-    for (unsigned long i=0; i < _maxPagesInTable; i++) {
+    for (size_t i = 0; i < _pages.size(); i++) {
         if (_pages[i]) {
-            ERRORMSG(_("Cache: page %lu hasn't be used!"), i+1);
-            delete _pages[i]->page();
-            delete _pages[i];
+            ERRORMSG(_("Cache: page %lu hasn't be used!"), static_cast<unsigned long>(i+1));
+            // No need for manual delete, vector of unique_ptr handles it
         }
     }
-    delete[] _pages;
+    _pages.clear();
 
     return res;
 }
@@ -370,11 +359,9 @@ bool uninitializeCache()
  * Enregistrement d'une page dans le cache
  * Register a new page in the cache
  */
-void registerPage(Page* page)
+void registerPage(std::unique_ptr<Page> page)
 {
-    CacheEntry *entry;
-    
-    entry = new CacheEntry(page);
+    auto entry = new CacheEntry(std::move(page));
     {
         _waitingListLock.lock();
         if (_lastWaitingList) {
@@ -395,21 +382,20 @@ void registerPage(Page* page)
  * Extraction d'une page du cache
  * Cache page extraction
  */
-Page* getNextPage()
+std::unique_ptr<Page> getNextPage()
 {
-    CacheEntry *entry = NULL;
-    unsigned long nr=0;
+    CacheEntry *entry = nullptr;
+    uint32_t nr = 0;
     bool notUnregister = false;
-    Page *page;
 
     // Get the next page number
     switch (_policy) {
         case EveryPagesIncreasing:
-            nr = _lastPageRequested + 1;
+            nr = static_cast<uint32_t>(_lastPageRequested + 1);
             break;
         case EvenDecreasing:
             if (_lastPageRequested > 2)
-                nr = _lastPageRequested - 2;
+                nr = static_cast<uint32_t>(_lastPageRequested - 2);
             else {
                 nr = 1;
                 setCachePolicy(OddIncreasing);
@@ -419,21 +405,22 @@ Page* getNextPage()
             if (!_lastPageRequested)
                 nr = 1;
             else
-                nr = _lastPageRequested + 2;
+                nr = static_cast<uint32_t>(_lastPageRequested + 2);
             break;
     }
 
-    DEBUGMSG(_("Next requested page : %lu (# pages into memory=%lu/%u)"), nr, 
-        _pagesInMemory, CACHESIZE);
+    DEBUGMSG(_("Next requested page : %lu (# pages into memory=%lu/%u)"), static_cast<unsigned long>(nr), 
+        static_cast<unsigned long>(_pagesInMemory), CACHESIZE);
 
     // Wait for the page
     while (nr && (!_numberOfPages || _numberOfPages >= nr)) {
         {
             _pageTableLock.lock();
-            if (_maxPagesInTable >= nr && _pages[nr - 1] && 
+            if (_pages.size() >= nr && _pages[nr - 1] && 
                 !_pages[nr - 1]->isSwapped()) {
-                entry = _pages[nr - 1];
-                _pages[nr - 1] = NULL;
+                entry = _pages[nr - 1].get();
+                // Note: we don't null out _pages[nr-1] yet because entry points to it
+                // We'll move it out later.
                 if (!entry->previous() && !entry->next() && entry != _inMemory)
                     notUnregister = true;
                 if (entry->previous())
@@ -443,10 +430,10 @@ Page* getNextPage()
                 if (entry == _inMemory)
                     _inMemory = entry->next();
                 if (entry == _inMemoryLast)
-                    _inMemoryLast = NULL;
+                    _inMemoryLast = entry->previous();
                 _pageTableLock.unlock();
                 break;
-            } else if (_maxPagesInTable >= nr && _pages[nr - 1] && 
+            } else if (_pages.size() >= nr && _pages[nr - 1] && 
                 _pages[nr - 1]->isSwapped())
                 _work++;
             _pageRequested = nr;
@@ -457,11 +444,16 @@ Page* getNextPage()
 
     // Extract the page instance
     if (!entry)
-        return NULL;
+        return nullptr;
+    
+    _pageTableLock.lock();
+    auto entryPtr = std::move(_pages[nr - 1]);
+    _pageTableLock.unlock();
+
     _pagesInTable--;
     _lastPageRequested = nr;
-    page = entry->page();
-    delete entry;
+    auto page = entryPtr->releasePage();
+    // entryPtr (the CacheEntry) is destroyed here when we return or at end of scope
 
     // Preload a new page
     if (!notUnregister)
@@ -497,7 +489,7 @@ void setCachePolicy(CachePolicy policy)
  * Enregistrer le nombre de pages maximum
  * Set the maximum number of pages
  */
-void setNumberOfPages(unsigned long nr)
+void setNumberOfPages(uint32_t nr)
 {
     _numberOfPages = nr;
     _pageAvailable++;
@@ -509,57 +501,49 @@ void setNumberOfPages(unsigned long nr)
  * Gestion des entrées du cache
  * Cache entry management
  */
-CacheEntry::CacheEntry(Page* page)
+CacheEntry::CacheEntry(std::unique_ptr<Page> page)
+    : _page(std::move(page)), _previous(nullptr), _next(nullptr)
 {
-    _tempFile = NULL;
-    _next = NULL;
-    _previous = NULL;
-    _page = page;
 }
 
 CacheEntry::~CacheEntry()
 {
-    if (_tempFile) {
+    if (!_tempFile.empty()) {
         ERRORMSG(_("Destroy a cache entry which is still swapped on disk."));
-        unlink(_tempFile);
-        delete[] _tempFile;
+        unlink(_tempFile.c_str());
     }
 }
 
 bool CacheEntry::swapToDisk()
 {
-    const char *path = "/tmp/splixV2-pageXXXXXX";
+    char path[] = "/tmp/splixV2-pageXXXXXX";
     int fd;
 
-    if (_tempFile) {
+    if (!_tempFile.empty()) {
         ERRORMSG(_("Trying to swap a page instance on the disk which is "
             "already swapped."));
         return false;
     }
 
     // Create the temporarily file
-    _tempFile = new char[strlen(path)+1];
-    strcpy(_tempFile, path);
-    if ((fd = mkstemp(_tempFile)) == -1) {
-        delete[] _tempFile;
-        _tempFile = NULL;
+    if ((fd = mkstemp(path)) == -1) {
         ERRORMSG(_("Cannot swap a page into disk (%i)"), errno);
         return false;
     }
+    _tempFile = path;
 
     // Swap the instance into the file
-    if (!_page->swapToDisk(fd)) {
-        unlink(_tempFile);
-        delete[] _tempFile;
-        _tempFile = NULL;
+    if (!_page || !_page->swapToDisk(fd)) {
+        unlink(_tempFile.c_str());
+        _tempFile.clear();
         ERRORMSG(_("Cannot swap a page into disk"));
+        close(fd);
         return false;
     }
 
-    DEBUGMSG(_("Page %lu swapped to disk"), _page->pageNr());
+    DEBUGMSG(_("Page %lu swapped to disk"), static_cast<unsigned long>(_page->pageNr()));
     close(fd);
-    delete _page;
-    _page = NULL;
+    _page.reset();
 
     return true;
 }
@@ -568,35 +552,41 @@ bool CacheEntry::restoreIntoMemory()
 {
     int fd;
 
-    if (!_tempFile) {
+    if (_tempFile.empty()) {
         ERRORMSG(_("Trying to restore a page instance into memory which is "
             "already into memory"));
         return false;
     }
 
     // Open the swap file
-    if ((fd = open(_tempFile, O_RDONLY)) == -1) {
+    if ((fd = open(_tempFile.c_str(), O_RDONLY)) == -1) {
         ERRORMSG(_("Cannot restore page into memory (%i)"), errno);
         return false;
     }
 
     // Restore the instance
-    if (!(_page = Page::restoreIntoMemory(fd))) {
+    _page = Page::restoreIntoMemory(fd);
+    if (!_page) {
         ERRORMSG(_("Cannot restore page into memory"));
+        close(fd);
         return false;
     }
 
     // Destroy the swap file
     close(fd);
-    unlink(_tempFile);
-    delete[] _tempFile;
-    _tempFile = NULL;
+    unlink(_tempFile.c_str());
+    _tempFile.clear();
 
-    DEBUGMSG(_("Page %lu restored into memory"), _page->pageNr());
+    DEBUGMSG(_("Page %lu restored into memory"), static_cast<unsigned long>(_page->pageNr()));
     return true;
 }
 
 #endif /* DISABLE_THREADS */
+
+std::unique_ptr<Page> CacheEntry::releasePage()
+{
+    return std::move(_page);
+}
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 

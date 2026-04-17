@@ -31,7 +31,7 @@ void applyBlackOptimization(Page* page)
     if (!page || page->colorsNr() != 4)
         return;
     for (unsigned int i=0; i < 4; i++) {
-        if (!(planes[i] = page->planeBuffer(i)))
+        if (!(planes[i] = page->planeBuffer(static_cast<uint8_t>(i))))
             return;
     }
 
@@ -48,23 +48,23 @@ void applyBlackOptimization(Page* page)
      */
     for (unsigned long i=0; i < sizeByUL; i++) {
         // Clear cyan, magenta and yellow dots if a black dot is present
-        mask = ((unsigned long *)planes[3])[i];
+        mask = reinterpret_cast<unsigned long *>(planes[3])[i];
         if (mask) {
-            ((unsigned long *)planes[0])[i] &= ~mask;
-            ((unsigned long *)planes[1])[i] &= ~mask;
-            ((unsigned long *)planes[2])[i] &= ~mask;
+            reinterpret_cast<unsigned long *>(planes[0])[i] &= ~mask;
+            reinterpret_cast<unsigned long *>(planes[1])[i] &= ~mask;
+            reinterpret_cast<unsigned long *>(planes[2])[i] &= ~mask;
         }
 
         // Set a black dot if cyan, magenta and yellow dots are present and
         // clear them
-        mask = ((unsigned long *)planes[0])[i];
-        mask &= ((unsigned long *)planes[1])[i];
-        mask &= ((unsigned long *)planes[2])[i];
+        mask = reinterpret_cast<unsigned long *>(planes[0])[i];
+        mask &= reinterpret_cast<unsigned long *>(planes[1])[i];
+        mask &= reinterpret_cast<unsigned long *>(planes[2])[i];
         if (mask) {
-            ((unsigned long *)planes[3])[i] |= mask;
-            ((unsigned long *)planes[0])[i] &= ~mask;
-            ((unsigned long *)planes[1])[i] &= ~mask;
-            ((unsigned long *)planes[2])[i] &= ~mask;
+            reinterpret_cast<unsigned long *>(planes[3])[i] |= mask;
+            reinterpret_cast<unsigned long *>(planes[0])[i] &= ~mask;
+            reinterpret_cast<unsigned long *>(planes[1])[i] &= ~mask;
+            reinterpret_cast<unsigned long *>(planes[2])[i] &= ~mask;
         }
     }
 

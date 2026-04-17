@@ -1,0 +1,262 @@
+[  2%] Building CXX object _deps/googletest-build/googletest/CMakeFiles/gtest.dir/src/gtest-all.cc.o
+[  5%] Building CXX object CMakeFiles/splix_core.dir/src/algo0x0d.cpp.o
+[  8%] Building CXX object CMakeFiles/splix_core.dir/src/algo0x0e.cpp.o
+[ 11%] Building CXX object CMakeFiles/splix_core.dir/src/algo0x11.cpp.o
+[ 14%] Building CXX object CMakeFiles/splix_core.dir/src/algo0x13.cpp.o
+[ 17%] Building CXX object CMakeFiles/splix_core.dir/src/algo0x15.cpp.o
+[ 20%] Building CXX object CMakeFiles/splix_core.dir/src/algorithm.cpp.o
+[ 22%] Building CXX object CMakeFiles/splix_core.dir/src/bandplane.cpp.o
+[ 25%] Building CXX object CMakeFiles/splix_core.dir/src/band.cpp.o
+[ 28%] Building CXX object CMakeFiles/splix_core.dir/src/cache.cpp.o
+[ 31%] Building CXX object CMakeFiles/splix_core.dir/src/colors.cpp.o
+[ 34%] Building CXX object CMakeFiles/splix_core.dir/src/core.cpp.o
+[ 37%] Building CXX object CMakeFiles/splix_core.dir/src/compress.cpp.o
+[ 40%] Building CXX object CMakeFiles/splix_core.dir/src/document.cpp.o
+[ 42%] Building CXX object CMakeFiles/splix_core.dir/src/page.cpp.o
+[ 45%] Building CXX object CMakeFiles/splix_core.dir/src/ppdfile.cpp.o
+[ 48%] Building CXX object CMakeFiles/splix_core.dir/src/printer.cpp.o
+[ 51%] Building CXX object CMakeFiles/splix_core.dir/src/qpdl.cpp.o
+[ 54%] Building CXX object CMakeFiles/splix_core.dir/src/rendering.cpp.o
+[ 60%] Building CXX object CMakeFiles/splix_core.dir/src/request.cpp.o
+[ 60%] Building CXX object CMakeFiles/splix_core.dir/src/sp_semaphore.cpp.o
+/workspace/src/ppdfile.cpp: In constructor 'PPDFile::PPDFile()':
+/workspace/src/ppdfile.cpp:33:22: warning: 'void ppdClose(ppd_file_t*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+   33 | PPDFile::PPDFile() : _ppd(nullptr, ppdClose)
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/include/ppdfile.h:24,
+                 from /workspace/src/ppdfile.cpp:21:
+/usr/include/cups/ppd.h:364:25: note: declared here
+  364 | extern void             ppdClose(ppd_file_t *ppd) _CUPS_DEPRECATED_1_6_MSG("Use cupsCopyDestInfo and friends instead.");
+      |                         ^~~~~~~~
+/workspace/src/ppdfile.cpp: In member function 'bool PPDFile::open(const char*, const char*, const char*)':
+/workspace/src/ppdfile.cpp:62:27: warning: 'ppd_file_t* ppdOpenFile(const char*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+   62 |     _ppd.reset(ppdOpenFile(file));
+      |                ~~~~~~~~~~~^~~~~~
+/usr/include/cups/ppd.h:389:26: note: declared here
+  389 | extern ppd_file_t       *ppdOpenFile(const char *filename) _CUPS_DEPRECATED_1_6_MSG("Use cupsCopyDestInfo and friends instead.");
+      |                          ^~~~~~~~~~~
+/workspace/src/ppdfile.cpp:69:20: warning: 'void ppdMarkDefaults(ppd_file_t*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+   69 |     ppdMarkDefaults(_ppd.get());
+      |     ~~~~~~~~~~~~~~~^~~~~~~~~~~~
+/usr/include/cups/ppd.h:384:25: note: declared here
+  384 | extern void             ppdMarkDefaults(ppd_file_t *ppd) _CUPS_DEPRECATED_1_6_MSG("Use cupsCopyDestInfo and friends instead.");
+      |                         ^~~~~~~~~~~~~~~
+/workspace/src/ppdfile.cpp:71:20: warning: 'int cupsMarkOptions(ppd_file_t*, int, cups_option_t*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+   71 |     cupsMarkOptions(_ppd.get(), nr, options);
+      |     ~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/cups/ppd.h:362:25: note: declared here
+  362 | extern int              cupsMarkOptions(ppd_file_t *ppd, int num_options, cups_option_t *options) _CUPS_DEPRECATED_1_6_MSG("Use cupsCopyDestInfo and friends instead.");
+      |                         ^~~~~~~~~~~~~~~
+/workspace/src/ppdfile.cpp:50:17: warning: variable 'fileVersion' set but not used [-Wunused-but-set-variable]
+   50 |     const char *fileVersion;
+      |                 ^~~~~~~~~~~
+/workspace/src/ppdfile.cpp:48:50: warning: unused parameter 'version' [-Wunused-parameter]
+   48 | bool PPDFile::open(const char *file, const char *version, const char *useropts)
+      |                                      ~~~~~~~~~~~~^~~~~~~
+/workspace/src/ppdfile.cpp: At global scope:
+/workspace/src/ppdfile.cpp:81:5: error: expected unqualified-id before 'if'
+   81 |     if (strcmp(fileVersion, version)) {
+      |     ^~
+/workspace/src/ppdfile.cpp:88:5: error: expected unqualified-id before 'return'
+   88 |     return true;
+      |     ^~~~~~
+/workspace/src/ppdfile.cpp:89:1: error: expected declaration before '}' token
+   89 | }
+      | ^
+/workspace/src/ppdfile.cpp: In member function 'PPDValue PPDFile::get(const char*, const char*)':
+/workspace/src/ppdfile.cpp:110:16: warning: implicitly-declared 'constexpr PPDFile::Value::Value(const PPDFile::Value&)' is deprecated [-Wdeprecated-copy]
+  110 |         return val;
+      |                ^~~
+/workspace/include/ppdfile.h:200:25: note: because 'PPDFile::Value' has user-provided 'void PPDFile::Value::operator=(const PPDFile::Value&)'
+  200 |                 void    operator = (const Value &val);
+      |                         ^~~~~~~~
+/workspace/src/ppdfile.cpp:114:27: warning: 'ppd_attr_t* ppdFindAttr(ppd_file_t*, const char*, const char*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+  114 |         attr = ppdFindAttr(_ppd.get(), name, NULL);
+      |                ~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/cups/ppd.h:399:26: note: declared here
+  399 | extern ppd_attr_t       *ppdFindAttr(ppd_file_t *ppd, const char *name,
+      |                          ^~~~~~~~~~~
+/workspace/src/ppdfile.cpp:116:27: warning: 'ppd_attr_t* ppdFindAttr(ppd_file_t*, const char*, const char*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+  116 |         attr = ppdFindAttr(_ppd.get(), opt, name);
+      |                ~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/cups/ppd.h:399:26: note: declared here
+  399 | extern ppd_attr_t       *ppdFindAttr(ppd_file_t *ppd, const char *name,
+      |                          ^~~~~~~~~~~
+/workspace/src/ppdfile.cpp:119:37: warning: 'ppd_choice_t* ppdFindMarkedChoice(ppd_file_t*, const char*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+  119 |         choice = ppdFindMarkedChoice(_ppd.get(), name);
+      |                  ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
+/usr/include/cups/ppd.h:377:26: note: declared here
+  377 | extern ppd_choice_t     *ppdFindMarkedChoice(ppd_file_t *ppd,
+      |                          ^~~~~~~~~~~~~~~~~~~
+/workspace/src/ppdfile.cpp:121:20: warning: implicitly-declared 'constexpr PPDFile::Value::Value(const PPDFile::Value&)' is deprecated [-Wdeprecated-copy]
+  121 |             return val;
+      |                    ^~~
+/workspace/include/ppdfile.h:200:25: note: because 'PPDFile::Value' has user-provided 'void PPDFile::Value::operator=(const PPDFile::Value&)'
+  200 |                 void    operator = (const Value &val);
+      |                         ^~~~~~~~
+/workspace/src/ppdfile.cpp:125:12: warning: implicitly-declared 'constexpr PPDFile::Value::Value(const PPDFile::Value&)' is deprecated [-Wdeprecated-copy]
+  125 |     return val;
+      |            ^~~
+/workspace/include/ppdfile.h:200:25: note: because 'PPDFile::Value' has user-provided 'void PPDFile::Value::operator=(const PPDFile::Value&)'
+  200 |                 void    operator = (const Value &val);
+      |                         ^~~~~~~~
+/workspace/src/ppdfile.cpp: In member function 'PPDValue PPDFile::getPageSize(const char*)':
+/workspace/src/ppdfile.cpp:133:26: warning: 'ppd_size_t* ppdPageSize(ppd_file_t*, const char*)' is deprecated: Use cupsCopyDestInfo and friends instead. [-Wdeprecated-declarations]
+  133 |     if (!(s = ppdPageSize(_ppd.get(), name)))
+      |               ~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
+/usr/include/cups/ppd.h:392:26: note: declared here
+  392 | extern ppd_size_t       *ppdPageSize(ppd_file_t *ppd, const char *name)
+      |                          ^~~~~~~~~~~
+/workspace/src/ppdfile.cpp:134:16: warning: implicitly-declared 'constexpr PPDFile::Value::Value(const PPDFile::Value&)' is deprecated [-Wdeprecated-copy]
+  134 |         return val;
+      |                ^~~
+/workspace/include/ppdfile.h:200:25: note: because 'PPDFile::Value' has user-provided 'void PPDFile::Value::operator=(const PPDFile::Value&)'
+  200 |                 void    operator = (const Value &val);
+      |                         ^~~~~~~~
+/workspace/src/ppdfile.cpp:136:12: warning: implicitly-declared 'constexpr PPDFile::Value::Value(const PPDFile::Value&)' is deprecated [-Wdeprecated-copy]
+  136 |     return val;
+      |            ^~~
+/workspace/include/ppdfile.h:200:25: note: because 'PPDFile::Value' has user-provided 'void PPDFile::Value::operator=(const PPDFile::Value&)'
+  200 |                 void    operator = (const Value &val);
+      |                         ^~~~~~~~
+gmake[2]: *** [CMakeFiles/splix_core.dir/build.make:272: CMakeFiles/splix_core.dir/src/ppdfile.cpp.o] Error 1
+gmake[2]: *** Waiting for unfinished jobs....
+/workspace/src/algo0x0d.cpp: In member function 'virtual std::unique_ptr<BandPlane> Algo0x0D::compress(const Request&, std::span<const unsigned char>, uint32_t, uint32_t)':
+/workspace/src/algo0x0d.cpp:201:63: warning: unused parameter 'request' [-Wunused-parameter]
+  201 | std::unique_ptr<BandPlane> Algo0x0D::compress(const Request & request, std::span<const uint8_t> data,
+      |                                               ~~~~~~~~~~~~~~~~^~~~~~~
+/workspace/src/printer.cpp: In member function 'bool Printer::loadInformation(const Request&)':
+/workspace/src/printer.cpp:66:68: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+   66 |     _manufacturer = (const char *)request.ppd()->get("Manufacturer");
+      |                                                                    ^
+      |                     -
+      |                     static_cast< -
+      |                                  > (                                )
+/workspace/src/printer.cpp:67:58: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+   67 |     _model = (const char *)request.ppd()->get("ModelName");
+      |                                                          ^
+      |              -
+      |              static_cast< -
+      |                           > (                             )
+/workspace/src/printer.cpp:80:36: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+   80 |     _unknownByte1 = ((const char *)value)[0];
+      |                                    ^~~~~
+      |                      -
+      |                      static_cast< -
+      |                                   > (   )
+/workspace/src/printer.cpp:81:36: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+   81 |     _unknownByte2 = ((const char *)value)[1];
+      |                                    ^~~~~
+      |                      -
+      |                      static_cast< -
+      |                                   > (   )
+/workspace/src/printer.cpp:82:36: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+   82 |     _unknownByte3 = ((const char *)value)[2];
+      |                                    ^~~~~
+      |                      -
+      |                      static_cast< -
+      |                                   > (   )
+/workspace/src/printer.cpp:91:31: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+   91 |     _beginPJL = (const char *)value;
+      |                               ^~~~~
+      |                 -
+      |                 static_cast< -
+      |                              > (   )
+/workspace/src/printer.cpp:98:29: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+   98 |     _endPJL = (const char *)value;
+      |                             ^~~~~
+      |               -
+      |               static_cast< -
+      |                            > (   )
+/workspace/src/printer.cpp: In member function 'bool Printer::sendPJLHeader(const Request&, long unsigned int, long unsigned int, long unsigned int) const':
+/workspace/src/printer.cpp:212:32: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+  211 |         printf("@PJL SET ECONOMODE=%s\n", (const char *)request.ppd()->
+      |                                           -
+      |                                           static_cast< -
+      |                                                        > (
+  212 |                 get("EconoMode"));
+      |                                ^
+      |                                 )
+/workspace/src/printer.cpp:217:61: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+  217 |                 (const char *)request.ppd()->get("PowerSave"));
+      |                                                             ^
+      |                 -
+      |                 static_cast< -
+      |                              > (                             )
+/workspace/src/printer.cpp:271:32: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+  270 |         printf("@PJL SET PAPERTYPE=%s\n", (const char *)request.ppd()->
+      |                                           -
+      |                                           static_cast< -
+      |                                                        > (
+  271 |                 get("MediaType"));
+      |                                ^
+      |                                 )
+/workspace/src/printer.cpp:276:31: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+  275 |         printf("@PJL SET ALTITUDE=%s\n", (const char *)request.ppd()->
+      |                                          -
+      |                                          static_cast< -
+      |                                                       > (
+  276 |                 get("Altitude"));
+      |                               ^
+      |                                )
+/workspace/src/printer.cpp:281:35: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+  280 |         printf("@PJL SET DENSITY=%s\n", (const char *)request.ppd()->
+      |                                         -
+      |                                         static_cast< -
+      |                                                      > (
+  281 |                 get("TonerDensity"));
+      |                                   ^
+      |                                    )
+/workspace/src/printer.cpp:286:30: warning: use of old-style cast to 'const char*' [-Wold-style-cast]
+  285 |         printf("@PJL SET RET=%s\n", (const char *)request.ppd()->
+      |                                     -
+      |                                     static_cast< -
+      |                                                  > (
+  286 |                 get("SRTMode"));
+      |                              ^
+      |                               )
+/workspace/src/printer.cpp: In member function 'bool Printer::sendPJLFooter(const Request&) const':
+/workspace/src/printer.cpp:299:44: warning: unused parameter 'request' [-Wunused-parameter]
+  299 | bool Printer::sendPJLFooter(const Request& request) const
+      |                             ~~~~~~~~~~~~~~~^~~~~~~
+/workspace/src/algo0x0e.cpp: In member function 'virtual std::unique_ptr<BandPlane> Algo0x0E::compress(const Request&, std::span<const unsigned char>, uint32_t, uint32_t)':
+/workspace/src/algo0x0e.cpp:175:63: warning: unused parameter 'request' [-Wunused-parameter]
+  175 |                                uint32_t width, uint32_t height)
+      |                                               ~~~~~~~~~~~~~~~~^      
+/workspace/src/algo0x11.cpp: In static member function 'static int Algo0x11::__compare(const void*, const void*)':
+/workspace/src/algo0x11.cpp:42:25: warning: use of old-style cast to 'uint32_t*' {aka 'unsigned int*'} [-Wold-style-cast]
+   42 |     return *(uint32_t *)n2 - *(uint32_t *)n1;
+      |                         ^~
+/workspace/src/algo0x11.cpp:42:43: warning: use of old-style cast to 'uint32_t*' {aka 'unsigned int*'} [-Wold-style-cast]
+   42 |     return *(uint32_t *)n2 - *(uint32_t *)n1;
+      |                                           ^~
+/workspace/src/algo0x11.cpp: In member function 'bool Algo0x11::_compress(std::span<const unsigned char>, std::vector<unsigned char>&)':
+/workspace/src/algo0x11.cpp:87:17: warning: variable 'w' set but not used [-Wunused-but-set-variable]
+   87 |     uint32_t r, w=4, uncompSize=0, maxCompSize, bestCompCounter, bestPtr;
+      |                 ^
+/workspace/src/algo0x11.cpp: In member function 'virtual std::unique_ptr<BandPlane> Algo0x11::compress(const Request&, std::span<const unsigned char>, uint32_t, uint32_t)':
+/workspace/src/algo0x11.cpp:202:62: warning: unused parameter 'request' [-Wunused-parameter]
+  202 | std::unique_ptr<BandPlane> Algo0x11::compress(const Request& request, std::span<const uint8_t> data,
+      |                                               ~~~~~~~~~~~~~~~^~~~~~~
+/workspace/src/algo0x15.cpp: In member function 'virtual std::unique_ptr<BandPlane> Algo0x15::compress(const Request&, std::span<const unsigned char>, uint32_t, uint32_t)':
+/workspace/src/algo0x15.cpp:107:49: warning: conversion from 'long unsigned int' to 'uint32_t' {aka 'unsigned int'} may change value [-Wconversion]
+  107 |         _maxSize = request.printer()->packetSize();
+      |                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~
+/workspace/src/document.cpp: In member function 'bool Document::load(const Request&)':
+/workspace/src/document.cpp:46:36: warning: unused parameter 'request' [-Wunused-parameter]
+   46 | bool Document::load(const Request& request)
+      |                     ~~~~~~~~~~~~~~~^~~~~~~
+/workspace/src/document.cpp: In member function 'std::unique_ptr<Page> Document::getNextRawPage(const Request&)':
+/workspace/src/document.cpp:77:30: warning: 'unsigned int cupsRasterReadHeader(cups_raster_t*, cups_page_header_t*)' is deprecated: Use cupsRasterReadHeader2 instead. [-Wdeprecated-declarations]
+   77 |     if (!cupsRasterReadHeader(_raster.get(), &header) || !header.cupsBytesPerLine ||
+      |          ~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/include/document.h:24,
+                 from /workspace/src/document.cpp:21:
+/usr/include/cups/raster.h:377:25: note: declared here
+  377 | extern unsigned         cupsRasterReadHeader(cups_raster_t *r, cups_page_header_t *h) _CUPS_DEPRECATED_MSG("Use cupsRasterReadHeader2 instead.") _CUPS_PUBLIC;
+      |                         ^~~~~~~~~~~~~~~~~~~~
+gmake[1]: *** [CMakeFiles/Makefile2:142: CMakeFiles/splix_core.dir/all] Error 2
+gmake[1]: *** Waiting for unfinished jobs....
+[ 62%] Linking CXX static library ../../../lib/libgtest.a
+[ 62%] Built target gtest
+gmake: *** [Makefile:166: all] Error 2

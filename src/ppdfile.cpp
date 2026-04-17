@@ -30,9 +30,19 @@
  * Constructeur - Destructeur
  * Init - Uninit
  */
-PPDFile::PPDFile()
+#include <cups/cups.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdio.h>
+#include "errlog.h"
+
+/*
+ * Constructeur - Destructeur
+ * Init - Uninit
+ */
+PPDFile::PPDFile() : _dest(nullptr), _dinfo(nullptr), _num_options(0), 
+    _options(nullptr)
 {
-    _ppd = NULL;
 }
 
 PPDFile::~PPDFile()
@@ -40,53 +50,57 @@ PPDFile::~PPDFile()
     close();
 }
 
-
-
 /*
  * Ouverture et fermeture du fichier PPD
  * Opening or closing PPD file
  */
 bool PPDFile::open(const char *file, const char *version, const char *useropts)
 {
+    const char *printerName;
     const char *fileVersion;
-    cups_option_t *options;
-    int nr;
 
-    // Check if a PPD file was previously opened
-    if (_ppd) {
-        ERRORMSG(_("Internal warning: a PPD file was previously opened. Please "
+    // Check if printer information was previously opened
+    if (_dest || _dinfo) {
+        ERRORMSG(_("Internal warning: printer info was previously opened. Please "
             "close it before opening a new one."));
         close();
     }
 
-    // Open the PPD file
-    _ppd = ppdOpenFile(file);
-    if (!_ppd) {
-        ERRORMSG(_("Cannot open PPD file %s"), file);
+    if (file) _ppdPath = file;
+
+    // Get the printer name from the environment
+    printerName = getenv("PRINTER");
+    if (!printerName)
+        printerName = getenv("CUPS_DEST");
+
+    _dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, printerName, NULL);
+    if (!_dest) {
+        // Fallback: try to find any destination if PRINTER is not set
+        _dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, NULL, NULL);
+    }
+
+    if (!_dest) {
+        ERRORMSG(_("Cannot find printer destination (PRINTER=%s)"), 
+            printerName ? printerName : "NULL");
         return false;
     }
 
-    // Mark the default values and the user options
-    ppdMarkDefaults(_ppd);
-    nr = cupsParseOptions(useropts, 0, &options);
-    cupsMarkOptions(_ppd, nr, options);
-    cupsFreeOptions(nr, options);
+    _dinfo = cupsCopyDestInfo(CUPS_HTTP_DEFAULT, _dest);
+    if (!_dinfo) {
+        ERRORMSG(_("Cannot get destination info for printer %s"), _dest->name);
+        return false;
+    }
 
-    // Check if the PPD version is compatible with this filter
+    // Parse user options
+    _num_options = cupsParseOptions(useropts, 0, &_options);
+
+    // Check version (we still use the file for this if available, or skip)
+    // NOTE: In a pure IPP world, version checking against a local PPD
+    // might be obsolete, but we keep the logic if possible.
     fileVersion = get("FileVersion");
-    if (!fileVersion) { 
-        ERRORMSG(_("No FileVersion found in the PPD file: invalid "
-            "PPD file"));
-        ppdClose(_ppd);
-        _ppd = NULL;
-        return false;
-    }
-    if (strcmp(fileVersion, version)) {
-        ERRORMSG(_("Invalid PPD file version: %s but the PPD file "
-            "is designed for SpliX V. %s"), version, fileVersion);
-        ppdClose(_ppd);
-        _ppd = NULL;
-        return false;
+    if (fileVersion && strcmp(fileVersion, version)) {
+        ERRORMSG(_("Invalid PPD version: %s (Expected: %s)"), fileVersion, version);
+        // We continue anyway as IPP info might be compatible
     }
 
     return true;
@@ -94,52 +108,84 @@ bool PPDFile::open(const char *file, const char *version, const char *useropts)
 
 void PPDFile::close()
 {
-    if (!_ppd)
-        return;
-    ppdClose(_ppd);
-    _ppd = NULL;
+    if (_dinfo) {
+        cupsFreeDestInfo(_dinfo);
+        _dinfo = nullptr;
+    }
+    if (_dest) {
+        cupsFreeDests(1, _dest);
+        _dest = nullptr;
+    }
+    if (_options) {
+        cupsFreeOptions(_num_options, _options);
+        _options = nullptr;
+        _num_options = 0;
+    }
 }
 
-
-
-
 /*
- * Obtention d'une donnée du fichier PPD
- * Get a string from the PPD file
+ * Obtention d'une donnée
+ * Get a value
  */
 PPDValue PPDFile::get(const char *name, const char *opt)
 {
-    ppd_attr_t *attr;
+    const char *valStr = nullptr;
     PPDValue val;
 
-    if (!_ppd) {
-        ERRORMSG(_("Trying to read a PPD file which wasn't opened"));
+    if (!_dinfo) {
+        ERRORMSG(_("Trying to read printer info which wasn't opened"));
         return val;
     }
 
-    if (!opt)
-        attr = ppdFindAttr(_ppd, name, NULL);
-    else
-        attr = ppdFindAttr(_ppd, opt, name);
-    if (!attr) {
-        ppd_choice_t *choice;
-        choice = ppdFindMarkedChoice(_ppd, name);
-        if (!choice)
-            return val;
-        val.set(choice->choice);
-    } else
-        val.set(attr->value);
+    // 1. Search in job-specific options first
+    valStr = cupsGetOption(name, _num_options, _options);
+
+    // 2. Search in destination info (defaults/attributes)
+    if (!valStr) {
+        if (opt) {
+            // It might be a choice for a specific option
+            ipp_attribute_t *attr = cupsFindDestSupported(CUPS_HTTP_DEFAULT, 
+                                        _dest, _dinfo, name);
+            if (attr) {
+                // Return default value if present
+                valStr = cupsGetOption(name, _dest->num_options, _dest->options);
+            }
+        } else {
+            // Check for general IPP attributes
+            // Search for custom attributes often mapped to cups- prefixed names
+            std::string cupsName = std::string("cups-") + name;
+            valStr = cupsGetOption(name, _dest->num_options, _dest->options);
+            if (!valStr)
+                valStr = cupsGetOption(cupsName.c_str(), _dest->num_options, 
+                            _dest->options);
+        }
+    }
+
+    if (valStr)
+        val.set(valStr);
+
     return val;
 }
 
 PPDValue PPDFile::getPageSize(const char *name)
 {
-    ppd_size_t *s;
     PPDValue val;
+    cups_size_t size;
 
-    if (!(s = ppdPageSize(_ppd, name)))
-        return val;
-    val.set(s->width, s->length, s->left, s->bottom);
+    if (!_dinfo) return val;
+
+    if (cupsGetDestMediaByName(CUPS_HTTP_DEFAULT, _dest, _dinfo, name, 
+            CUPS_MEDIA_FLAGS_DEFAULT, &size)) {
+        // CUPS size is in 100ths of a millimeter. Convert to points (1/72 inch).
+        // 1 point = 25.4 / 72 mm = 0.352778 mm
+        // points = (mm / 25.4) * 72
+        float w = (static_cast<float>(size.width) / 2540.0f) * 72.0f;
+        float h = (static_cast<float>(size.length) / 2540.0f) * 72.0f;
+        float lm = (static_cast<float>(size.left) / 2540.0f) * 72.0f;
+        float bm = (static_cast<float>(size.bottom) / 2540.0f) * 72.0f;
+        val.set(w, h, lm, bm);
+    }
+
     return val;
 }
 
@@ -153,7 +199,6 @@ PPDFile::Value::Value()
 {
     _value = NULL;
     _out = NULL;
-    _preformatted = NULL;
     _width = 0.;
     _height = 0.;
     _marginX = 0.;
@@ -164,7 +209,6 @@ PPDFile::Value::Value(const char *value)
 {
     _value = value;
     _out = value;
-    _preformatted = NULL;
     _width = 0.;
     _height = 0.;
     _marginX = 0.;
@@ -173,16 +217,11 @@ PPDFile::Value::Value(const char *value)
 
 PPDFile::Value::~Value()
 {
-    if (_preformatted)
-        delete[] _preformatted;
 }
 
 PPDFile::Value& PPDFile::Value::set(const char *value)
 {
-    if (_preformatted) {
-        delete[] _preformatted;
-        _preformatted = NULL;
-    }
+    _preformatted.clear();
     _value = value;
     _out = _value;
 
@@ -203,13 +242,14 @@ PPDFile::Value& PPDFile::Value::set(float width, float height, float marginX,
 PPDFile::Value& PPDFile::Value::setPreformatted()
 {
     const char *str = _value;
-    unsigned int i;
 
     if (!str)
         return *this;
 
-    _preformatted = new char[strlen(str)];
-    for (i=0; *str; str++) {
+    _preformatted.clear();
+    _preformatted.reserve(strlen(str));
+
+    while (*str) {
         if (*str == '<' && strlen(str) >= 3 && isxdigit(*(str+1))) {
             char temp[3] = {0, 0, 0};
 
@@ -217,38 +257,32 @@ PPDFile::Value& PPDFile::Value::setPreformatted()
             temp[0] = *str;
             str++;
             if (*str != '>' && (!isxdigit(*str) || *(str + 1) != '>')) {
-                _preformatted[i] = '<';
-                _preformatted[i+1] = temp[0];
-                i += 2;
+                _preformatted += '<';
+                _preformatted += temp[0];
                 continue;
             }
             if (*str != '>') {
                 temp[1] = *str;
                 str++;
             }
-            _preformatted[i] = (char)strtol((char *)&temp, (char **)NULL,16);
-            i++;
+            _preformatted += static_cast<char>(strtol(temp, nullptr, 16));
+            if (*str == '>')
+                str++;
             continue;
         }
-        _preformatted[i] = *str;
-        i++;
+        _preformatted += *str;
+        str++;
     }
-    _preformatted[i] = 0;
-    _out = _preformatted;
+    _out = _preformatted.c_str();
 
     return *this;
 }
 
-char* PPDFile::Value::deepCopy() const
+std::string PPDFile::Value::deepCopy() const
 {
-    char *tmp;
-
     if (!_out)
-        return NULL;
-    tmp = new char[strlen(_out)+1];
-    strcpy(tmp, _out);
-
-    return tmp;
+        return "";
+    return std::string(_out);
 }
 
 bool PPDFile::Value::isTrue() const
@@ -279,20 +313,35 @@ bool PPDFile::Value::operator != (const char* val) const
 
 
 /*
- * Opérateur d'assignation
- * Assignment operator
+ * Copy constructor
  */
-void PPDFile::Value::operator = (const PPDFile::Value &val)
+PPDFile::Value::Value(const PPDFile::Value &val)
 {
-    if (_preformatted)
-        delete[] _preformatted;
     _value = val._value;
-    _out = val._out;
     _preformatted = val._preformatted;
+    _out = _preformatted.empty() ? _value : _preformatted.c_str();
     _width = val._width;
     _height = val._height;
     _marginX = val._marginX;
     _marginY = val._marginY;
+}
+
+/*
+ * Opérateur d'assignation
+ * Assignment operator
+ */
+PPDFile::Value& PPDFile::Value::operator = (const PPDFile::Value &val)
+{
+    if (this == &val)
+        return *this;
+    _value = val._value;
+    _preformatted = val._preformatted;
+    _out = _preformatted.empty() ? _value : _preformatted.c_str();
+    _width = val._width;
+    _height = val._height;
+    _marginX = val._marginX;
+    _marginY = val._marginY;
+    return *this;
 }
 
 
