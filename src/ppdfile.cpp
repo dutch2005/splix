@@ -92,6 +92,8 @@ bool PPDFile::open(const char *file, const char *version, const char *useropts)
         _ppd = ppdOpenFile(file);
         if (!_ppd) {
             ERRORMSG(_("Cannot open PPD file %s: %s"), file, cupsLastErrorString());
+        } else {
+            ppdMarkDefaults(_ppd);
         }
     }
 
@@ -167,11 +169,17 @@ PPDValue PPDFile::get(const char *name, const char *opt)
     // 3. Fallback to direct PPD file loading
     if (!valStr && _ppd) {
         ppd_choice_t *choice = ppdFindMarkedChoice(_ppd, name);
-        if (!choice) {
-            ppd_option_t *option = ppdFindOption(_ppd, name);
-            if (option) valStr = option->defchoice;
-        } else {
+        if (choice) {
             valStr = choice->choice;
+        } else {
+            ppd_option_t *option = ppdFindOption(_ppd, name);
+            if (option) {
+                valStr = option->defchoice;
+            } else {
+                // Finally, look for attributes (e.g. *QPDL BandSize)
+                ppd_attr_t *attr = ppdFindAttr(_ppd, name, section);
+                if (attr) valStr = attr->value;
+            }
         }
     }
 
