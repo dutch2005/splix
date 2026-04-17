@@ -22,7 +22,17 @@ fi
 echo "── Running Functional Raster-to-QPDL Test ──"
 
 # Setup dummy environment variables that CUPS would provide
-export PPD="$PWD/ppd/ml1710.ppd" # Use a standard monochrome PPD
+# Try to find the PPD in Source or PWD
+if [ -f "$PWD/ppd/ml1710.ppd" ]; then
+    export PPD="$PWD/ppd/ml1710.ppd"
+elif [ -f "$(dirname "$0")/../ppd/ml1710.ppd" ]; then
+    # When run from build dir, script is in source/tests, so PPD is in source/ppd
+    export PPD="$(realpath "$(dirname "$0")/../ppd/ml1710.ppd")"
+else
+    echo "❌ Error: ml1710.ppd not found."
+    exit 1
+fi
+echo "Using PPD: $PPD"
 export CUPS_SERVERBIN="/usr/lib/cups"
 export CUPS_DATADIR="/usr/share/cups"
 export PRINTER="splix_test_printer"
