@@ -32,10 +32,13 @@ export HOME="$PWD/temp_home"
 export CUPS_CONFDIR="$PWD/temp_home/cups"
 mkdir -p "$HOME/.cups"
 mkdir -p "$CUPS_CONFDIR"
-echo "dest $PRINTER ml1710" > "$HOME/.cups/lpoptions"
+# Simple format: "dest name" or "Default name"
+echo "dest $PRINTER" > "$HOME/.cups/lpoptions"
 echo "Default $PRINTER" > "$CUPS_CONFDIR/lpoptions"
 export LPDEST="$PRINTER"
 export CUPS_LPDEST="$PRINTER"
+# Prevent libcups from trying to contact a real server
+export CUPS_SERVER="localhost"
 
 # 1. Generate a minimal CUPS Raster Header (448 bytes)
 # 'RaSt' (0x52 0x61 0x53 0x74) - Synch string
