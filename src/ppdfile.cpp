@@ -80,15 +80,13 @@ bool PPDFile::open(const char *file, const char *version, const char *useropts)
     }
 
     if (!_dest) {
-        ERRORMSG(_("Cannot find printer destination (PRINTER=%s)"), 
+        LOGW(_("Cannot find printer destination (PRINTER=%s). Proceeding with defaults."), 
             printerName ? printerName : "NULL");
-        return false;
-    }
-
-    _dinfo = cupsCopyDestInfo(CUPS_HTTP_DEFAULT, _dest);
-    if (!_dinfo) {
-        ERRORMSG(_("Cannot get destination info for printer %s"), _dest->name);
-        return false;
+    } else {
+        _dinfo = cupsCopyDestInfo(CUPS_HTTP_DEFAULT, _dest);
+        if (!_dinfo) {
+            LOGW(_("Cannot get destination info for printer %s. Proceeding with defaults."), _dest->name);
+        }
     }
 
     // Parse user options
