@@ -181,10 +181,11 @@ PPDValue PPDFile::get(const char *name, const char *opt)
                 // So "name" from the caller (BandSize) is technically the spec,
                 // and "opt" (QPDL) is the attribute name.
                 ppd_attr_t *attr = nullptr;
-                if (opt)
+                if (opt) {
                     attr = ppdFindAttr(_ppd, opt, name);
-                else
+                } else {
                     attr = ppdFindAttr(_ppd, name, nullptr);
+                }
 
                 if (attr && attr->value) {
                     valStr = attr->value;
@@ -194,10 +195,19 @@ PPDValue PPDFile::get(const char *name, const char *opt)
                         if (len >= 2 && valStr[len-1] == '"') {
                             std::string unquoted(valStr + 1, len - 2);
                             val.set(unquoted.c_str());
-                            val.setPreformatted(); // Copies from _value into _preformatted
+                            val.setPreformatted(); // Copies into _preformatted
                             return val;
                         }
                     }
+                } else if (opt && name) {
+                    // Fallback: try reversed just in case libcups/PPD is weird
+                    attr = ppdFindAttr(_ppd, name, opt);
+                    if (attr && attr->value) {
+                        valStr = attr->value;
+                    }
+                }
+                if (!valStr) {
+                    //fprintf(stderr, "DEBUG: PPDFile::get: Failed to find attribute %s/%s\n", opt, name);
                 }
             }
         }
