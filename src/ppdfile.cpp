@@ -186,9 +186,7 @@ PPDValue PPDFile::getPageSize(const char *name)
     PPDValue val;
     cups_size_t size;
 
-    if (!_dinfo) return val;
-
-    if (cupsGetDestMediaByName(CUPS_HTTP_DEFAULT, _dest, _dinfo, name, 
+    if (_dinfo && cupsGetDestMediaByName(CUPS_HTTP_DEFAULT, _dest, _dinfo, name, 
             CUPS_MEDIA_FLAGS_DEFAULT, &size)) {
         // CUPS size is in 100ths of a millimeter. Convert to points (1/72 inch).
         float w = (static_cast<float>(size.width) / 2540.0f) * 72.0f;
