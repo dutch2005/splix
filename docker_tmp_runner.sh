@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
 echo " [1/4] Installing dependencies..."
@@ -25,36 +26,24 @@ else
 fi
 
 echo " [2/4] Configuring CMake..."
-rm -rf /tmp/splix-build
-mkdir  /tmp/splix-build
-
-cmake \
-    -S /workspace \
-    -B /tmp/splix-build \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-    ${TOOLCHAIN_FLAG} > /dev/null
+if [ "${DEB_ARCH:-amd64}" = "arm64" ]; then
+    cmake --preset linux-arm64-release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+else
+    cmake --preset linux-amd64-release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+fi
 
 echo " [3/4] Compiling..."
-cmake --build /tmp/splix-build --parallel "$(nproc)" > /dev/null
+if [ "${DEB_ARCH:-amd64}" = "arm64" ]; then
+    cmake --build --preset linux-arm64-release --parallel "$(nproc)"
+    cd build-arm64
+else
+    cmake --build --preset linux-amd64-release --parallel "$(nproc)"
+    cd build-amd64
+fi
 
 echo " [4/4] Generating Debian Package (.deb)..."
-PKG_VERSION="${GITHUB_REF_NAME:-2.0.2}"
-cd /tmp/splix-build
-
-PKG_DIR="/tmp/splix-pkg"
-mkdir -p "${PKG_DIR}/DEBIAN"
-
-echo "Package: splix" > "${PKG_DIR}/DEBIAN/control"
-echo "Version: ${PKG_VERSION}" >> "${PKG_DIR}/DEBIAN/control"
-echo "Architecture: ${DEB_ARCH:-amd64}" >> "${PKG_DIR}/DEBIAN/control"
-echo "Maintainer: github-actions@noreply.github.com" >> "${PKG_DIR}/DEBIAN/control"
-echo "Depends: cups, libcups2, libcupsimage2, libjbig0" >> "${PKG_DIR}/DEBIAN/control"
-echo "Description: SpliX printer drivers for Samsung and Xerox printers" >> "${PKG_DIR}/DEBIAN/control"
-
-make DESTDIR="${PKG_DIR}" install > /dev/null
-dpkg-deb --build "${PKG_DIR}" "/workspace/artifacts/splix-ubuntu-${PKG_VERSION}-${DEB_ARCH:-amd64}.deb"
+cpack
+cp *.deb /workspace/artifacts/
 
 echo "=================================================="
 echo " ??? SUCCESS! Package generated securely."

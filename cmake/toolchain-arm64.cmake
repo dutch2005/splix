@@ -65,3 +65,12 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 # PKG_CONFIG_SYSROOT_DIR: not set — Debian multiarch doesn't use a sysroot
 set(ENV{PKG_CONFIG_PATH}    "")
 set(ENV{PKG_CONFIG_LIBDIR}  "/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig")
+
+# ── Cross-Compilation Emulator (Optional) ────────────────────────────────────
+# Allows CMake's `add_test` and `ctest` to run cross-compiled binaries
+# seamlessly by invoking them through QEMU.
+# Requires: apt-get install qemu-user-static
+find_program(QEMU_AARCH64 NAMES qemu-aarch64-static)
+if(QEMU_AARCH64)
+    set(CMAKE_CROSSCOMPILING_EMULATOR ${QEMU_AARCH64})
+endif()

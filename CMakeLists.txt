@@ -1,10 +1,15 @@
-cmake_minimum_required(VERSION 3.10)
-cmake_policy(SET CMP0048 NEW)
+cmake_minimum_required(VERSION 3.16)
 
 project(splix
     VERSION     2.0.2
     DESCRIPTION "Samsung / Xerox / Dell printer CUPS driver (QPDL)"
     LANGUAGES   CXX
+)
+
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/include/version.h
+    @ONLY
 )
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -23,18 +28,19 @@ option(DISABLE_BLACKOPTIM "Disable black optimization" OFF)
 set(THREADS "2" CACHE STRING "Number of threads to use")
 set(CACHESIZE "30" CACHE STRING "Cache size in MB")
 
+set(SPLIX_CORE_DEFS "")
 if(DISABLE_THREADS)
-    add_compile_definitions(DISABLE_THREADS)
+    list(APPEND SPLIX_CORE_DEFS DISABLE_THREADS)
 else()
-    add_compile_definitions(THREADS=${THREADS} CACHESIZE=${CACHESIZE})
+    list(APPEND SPLIX_CORE_DEFS THREADS=${THREADS} CACHESIZE=${CACHESIZE})
 endif()
 
 if(DISABLE_JBIG)
-    add_compile_definitions(DISABLE_JBIG)
+    list(APPEND SPLIX_CORE_DEFS DISABLE_JBIG)
 endif()
 
 if(DISABLE_BLACKOPTIM)
-    add_compile_definitions(DISABLE_BLACKOPTIM)
+    list(APPEND SPLIX_CORE_DEFS DISABLE_BLACKOPTIM)
 endif()
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -160,32 +166,42 @@ message(STATUS "  DRV dir     : ${SPLIX_DRV_DIR}")
 message(STATUS "  Profile dir : ${SPLIX_PROFILE_DIR}")
 
 # ────────────────────────────────────────────────────────────────────────────
-# Global Include Paths
-# ────────────────────────────────────────────────────────────────────────────
-include_directories(
-    ${CUPS_INCLUDE_DIR}
-    ${CUPS_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-# ────────────────────────────────────────────────────────────────────────────
 # Core Static Library  (splix_core)
 # ────────────────────────────────────────────────────────────────────────────
 # Collect every .cpp in src/ that is NOT an entry-point binary; this becomes
 # the shared core that both filter executables link against.
-file(GLOB SPLIX_CORE_SRC "src/*.cpp")
-list(REMOVE_ITEM SPLIX_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/rastertoqpdl.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/pstoqpdl.cpp"
+set(SPLIX_CORE_SRC
+    src/algo0x0d.cpp
+    src/algo0x0e.cpp
+    src/algo0x11.cpp
+    src/algo0x13.cpp
+    src/algo0x15.cpp
+    src/algorithm.cpp
+    src/band.cpp
+    src/bandplane.cpp
+    src/cache.cpp
+    src/colors.cpp
+    src/compress.cpp
+    src/core.cpp
+    src/document.cpp
+    src/page.cpp
+    src/ppdfile.cpp
+    src/printer.cpp
+    src/qpdl.cpp
+    src/rendering.cpp
+    src/request.cpp
+    src/semaphore.cpp
 )
 
 add_library(splix_core STATIC ${SPLIX_CORE_SRC})
 target_include_directories(splix_core PUBLIC
-    ${CUPS_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_BINARY_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CUPS_INCLUDE_DIRS}
 )
 # Propagate CUPS compile flags (e.g. -D_CUPS_SOURCE) to consumers
 target_compile_options(splix_core PUBLIC ${CUPS_CFLAGS_OTHER})
+target_compile_definitions(splix_core PUBLIC ${SPLIX_CORE_DEFS})
 
 # ────────────────────────────────────────────────────────────────────────────
 # Binary: rastertoqpdl
@@ -305,3 +321,18 @@ install(
     FILES_MATCHING
         PATTERN "es*.ppd"
 )
+
+# ────────────────────────────────────────────────────────────────────────────
+# Testing
+# ────────────────────────────────────────────────────────────────────────────
+enable_testing()
+add_test(NAME smoke_rastertoqpdl COMMAND rastertoqpdl)
+set_tests_properties(smoke_rastertoqpdl PROPERTIES WILL_FAIL TRUE) # usage exits 1
+
+add_test(NAME smoke_pstoqpdl COMMAND pstoqpdl)
+set_tests_properties(smoke_pstoqpdl PROPERTIES WILL_FAIL TRUE) # usage exits 1
+
+# ────────────────────────────────────────────────────────────────────────────
+# Packaging
+# ────────────────────────────────────────────────────────────────────────────
+include(cmake/SpliXCPack.cmake)

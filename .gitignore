@@ -10,3 +10,12 @@ gmon.out
 optimized
 ppd/*.drv
 tmp
+
+# CMake
+build/
+build-*/
+CMakeUserPresets.json
+.ccache/
+
+# Artifacts
+artifacts/
