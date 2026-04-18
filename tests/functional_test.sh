@@ -27,12 +27,16 @@ if [ -f "$PWD/ppd/ml1710.ppd" ]; then
     export PPD="$PWD/ppd/ml1710.ppd"
 elif [ -f "$(dirname "$0")/../ppd/ml1710.ppd" ]; then
     # When run from build dir, script is in source/tests, so PPD is in source/ppd
-    export PPD="$(realpath "$(dirname "$0")/../ppd/ml1710.ppd")"
+    REL_PATH="$(dirname "$0")/../ppd/ml1710.ppd"
+    export PPD="$(cd "$(dirname "$REL_PATH")" && pwd)/$(basename "$REL_PATH")"
 else
     echo "❌ Error: ml1710.ppd not found."
+    ls -R . || true
     exit 1
 fi
 echo "Using PPD: $PPD"
+ls -l "$PPD" || echo "❌ Cannot ls PPD"
+
 export CUPS_SERVERBIN="/usr/lib/cups"
 export CUPS_DATADIR="/usr/share/cups"
 export PRINTER="splix_test_printer"
@@ -40,7 +44,8 @@ export PRINTER="splix_test_printer"
 # Mock a CUPS destination so cupsGetNamedDest succeeds
 # We mock at both system and user level to be safe
 export HOME="$PWD/temp_home"
-export CUPS_CONFDIR="$PWD/temp_home/cups"
+mkdir -p "$HOME"
+export CUPS_CONFDIR="$HOME/cups"
 mkdir -p "$HOME/.cups"
 mkdir -p "$CUPS_CONFDIR"
 mkdir -p /etc/cups 2>/dev/null || true
