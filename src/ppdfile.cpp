@@ -207,11 +207,6 @@ PPDValue PPDFile::get(const char *name, const char *opt)
                     }
                 }
 
-                if (!valStr && !strcmp(name, "BandSize")) {
-                    fprintf(stderr, "DEBUG: PPDFile::get: Failed to find BandSize attribute. (opt=%s, name=%s)\n", opt ? opt : "NULL", name);
-                } else if (valStr && !strcmp(name, "BandSize")) {
-                    fprintf(stderr, "DEBUG: PPDFile::get: Found BandSize attributes: %s\n", valStr);
-                }
             }
         }
     }
