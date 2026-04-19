@@ -25,8 +25,11 @@
 #include <cups/ppd.h>
 #include <stdlib.h>
 #include <string>
+#include <string_view>
 #include <memory>
 #include <vector>
+#include <charconv>
+#include "sp_result.h"
 
 /**
   * @class PPDFile
@@ -45,9 +48,8 @@ class PPDFile
           */
         class Value {
             protected:
-                const char*         _value;
+                std::string         _raw;
                 std::string         _preformatted;
-                const char*         _out;
                 float               _width;
                 float               _height;
                 float               _marginX;
@@ -55,47 +57,51 @@ class PPDFile
 
             public:
                 Value();
-                Value(const char *value);
+                Value(std::string_view value);
                 virtual ~Value();
 
             public:
-                PPDFile::Value&     set(const char *value);
-                PPDFile::Value&     set(float width, float height, float
+                Value&              set(std::string_view value);
+                Value&              set(float width, float height, float
                                         marginX, float marginY);
-                PPDFile::Value&     setPreformatted();
+                Value&              setPreformatted();
 
             public:
                 float               width() const {return _width;}
                 float               height() const {return _height;}
                 float               marginX() const {return _marginX;}
                 float               marginY() const {return _marginY;}
-                bool                isNull() const {return _out ? false : true;}
+                bool                isNull() const {return _out.empty() && !_hasValue;}
                 std::string         deepCopy() const;
                 bool                isTrue() const;
                 bool                isFalse() const {return !isTrue();}
-                operator bool() const {return isTrue();}
-                operator const char*() const {return _out;}
-                operator unsigned long() const 
-                        {return _out ? strtol(_out, (char**)NULL, 10) : 0;}
-                operator long() const 
-                        {return _out ? strtol(_out, (char**)NULL, 10) : 0;}
-                operator float() const 
-                        {return _out ? strtof(_out, (char**)NULL) : 0;}
-                operator double() const 
-                        {return _out ? strtod(_out, (char**)NULL) : 0;}
-                operator long double() const 
-                        {return _out ? strtold(_out, (char**)NULL) : 0;}
-                bool    operator == (const char* val) const;
-                bool    operator != (const char* val) const;
+                operator bool() const {return !isNull();}
+                operator const char*() const {return isNull() ? nullptr : _out.c_str();}
+                operator unsigned long() const;
+                operator long() const;
+                operator float() const;
+                operator double() const;
+                operator long double() const;
+                bool    operator == (std::string_view val) const;
+                bool    operator == (const char *val) const;
+                bool    operator != (std::string_view val) const;
+                bool    operator != (const char *val) const;
+            private:
+                std::string         _out;
+                bool                _hasValue = false;
             public:
                 Value(const Value& other);
                 Value&  operator = (const Value &val);
         };
 
     protected:
-        cups_dest_t     *_dest;
-        cups_dinfo_t    *_dinfo;
-        ppd_file_t      *_ppd;
+        struct DestDeleter { void operator()(cups_dest_t *d) const { if (d) cupsFreeDests(1, d); } };
+        struct DInfoDeleter { void operator()(cups_dinfo_t *d) const { if (d) cupsFreeDestInfo(d); } };
+        struct PPDDeleter { void operator()(ppd_file_t *p) const { if (p) ppdClose(p); } };
+
+        std::unique_ptr<cups_dest_t, DestDeleter>   _dest;
+        std::unique_ptr<cups_dinfo_t, DInfoDeleter> _dinfo;
+        std::unique_ptr<ppd_file_t, PPDDeleter>     _ppd;
         int              _num_options;
         cups_option_t   *_options;
         std::string      _ppdPath;
@@ -114,11 +120,10 @@ class PPDFile
           * @param file the file path and name
           * @param version the current SpliX version
           * @param useropts the user options
-          * @return TRUE if the PPD has been successfully opened. Otherwise it
-          *         returns false.
+          * @return SP::Result<> indicating success or error code.
           */
-        bool                    open(const char *file, const char *version, 
-                                    const char *useropts = "");
+        SP::Result<>            open(std::string_view file, std::string_view version, 
+                                    std::string_view useropts = "");
         /**
           * Close a previously opened PPD file.
           */
@@ -134,14 +139,23 @@ class PPDFile
           *         or the group/key doesn't exists or if there is no data 
           *         associated.
           */
-        Value                   get(const char *name, const char *opt=NULL);
+        /**
+          * Get the string associated to a key or a key and a group.
+          * @param name the key name
+          * @param opt the name of the group if the key is in the group.
+          *            Otherwise it must be set to NULL
+          * @return a PPDValue instance containing the string or NULL if the key
+          *         or the group/key doesn't exists or if there is no data 
+          *         associated.
+          */
+        Value                   get(std::string_view name, std::string_view opt = "");
         /**
           * Get the page size information.
           * @param name the page format name
           * @return a PPDValue instance containing the width and the height of
           *         the page format requested.
           */
-        Value                   getPageSize(const char *name);
+        Value                   getPageSize(std::string_view name);
 };
 
 /**

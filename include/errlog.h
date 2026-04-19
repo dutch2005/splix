@@ -21,7 +21,7 @@
 #ifndef _ERRLOG_H_
 #define _ERRLOG_H_
 
-#include <stdio.h>
+#include <cstdio>
 
 #define _(X)            X
 

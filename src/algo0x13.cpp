@@ -26,6 +26,7 @@
 #include <span>
 #include <cstdint>
 #include <algorithm>
+#include <ranges>
 #include "errlog.h"
 #include "request.h"
 #include "printer.h"
@@ -39,7 +40,7 @@
  */
 void Algo0x13::_callback(unsigned char *data, size_t len, void *arg)
 {
-    info_t* info = static_cast<info_t *>(arg);
+    auto* info = static_cast<info_t *>(arg);
 
     if (!len)
         return;
@@ -53,7 +54,7 @@ void Algo0x13::_callback(unsigned char *data, size_t len, void *arg)
         plane->setCompression(0x13);
         info->list->push_back(std::move(plane));
         if (len != 20)
-            ERRORMSG(_("the first BIH *MUST* be 20 bytes long (currently=%zu"), len);
+            ERRORMSG(_("the first BIH *MUST* be 20 bytes long (currently={})"), len);
     } else {
         while (len > 0) {
             // Full band: register it
@@ -68,11 +69,11 @@ void Algo0x13::_callback(unsigned char *data, size_t len, void *arg)
 
             // Collect data
             uint32_t freeSpace = info->maxSize - static_cast<uint32_t>(info->currentData.size());
-            uint32_t toCopy = (freeSpace < static_cast<uint32_t>(len)) ? freeSpace : static_cast<uint32_t>(len);
+            uint32_t toCopy = std::min(freeSpace, static_cast<uint32_t>(len));
             
             size_t oldSize = info->currentData.size();
             info->currentData.resize(oldSize + toCopy);
-            std::memcpy(info->currentData.data() + oldSize, data, toCopy);
+            std::ranges::copy(std::span(data, toCopy), info->currentData.begin() + oldSize);
             
             data += toCopy;
             len -= toCopy;
@@ -80,47 +81,56 @@ void Algo0x13::_callback(unsigned char *data, size_t len, void *arg)
     }
 }
 
+// LIFECYCLE: Managed by compiler defaults in the header.
+#endif /* DISABLE_JBIG */
 
-
-/*
- * Constructeur - Destructeur
- * Init - Uninit
- */
-Algo0x13::Algo0x13()
-{
-    _compressed = false;
-}
-
-Algo0x13::~Algo0x13()
-{
-}
-
-
-
+#ifndef DISABLE_JBIG
 /*
  * Routine de compression
  * Compression routine
  */
-std::unique_ptr<BandPlane> Algo0x13::compress(const Request& request, std::span<const uint8_t> data, 
+SP::Result<std::unique_ptr<BandPlane>> Algo0x13::compress(const Request& request, std::span<const uint8_t> data, 
         uint32_t width, uint32_t height)
 {
     jbg85_enc_state state;
     uint32_t i, wbytes;
     info_t info = {&_list, {}, 0};
 
-    if (data.empty() || !width || !height) {
+    if (width > 32768 || height > 32768 || width == 0 || height == 0) {
+        ERRORMSG(_("Invalid raster dimensions for Algo0x13: %ux%u"), width, height);
+        return SP::Unexpected(SP::Error::InvalidArgument);
+    }
+
+    if (data.empty()) {
         ERRORMSG(_("Invalid given data for compression (0x13)"));
-        return nullptr;
+        return SP::Unexpected(SP::Error::InvalidArgument);
     }
 
     // Compress if it's the first time
     if (!_compressed) {
+        if (!request.printer()) {
+            return SP::Unexpected(SP::Error::InvalidArgument);
+        }
+
         info.maxSize = static_cast<uint32_t>(request.printer()->packetSize());
         if (!info.maxSize) {
             ERRORMSG(_("PacketSize is set to 0!"));
             info.maxSize = 512*1024;
         }
+
+        // Defensive check: prevent overflow in wbytes calculation
+        if (width > 0x1FFFFFFF) {
+             return SP::Unexpected(SP::Error::RasterDimensionTooLarge);
+        }
         wbytes = (width + 7) / 8;
+
+        // Ensure data span is large enough
+        if (data.size() < static_cast<size_t>(wbytes) * height) {
+            ERRORMSG(_("Data span too small for dimensions: %zu < %u*%u"), 
+                     data.size(), wbytes, height);
+            return SP::Unexpected(SP::Error::InvalidArgument);
+        }
+
         jbg85_enc_init(&state, width, height, _callback, &info);
         jbg85_enc_options(&state, JBG_LRLTWO | JBG_TPBON, height, 0);
         for (i = 0; i < height; i++) {
@@ -129,9 +139,9 @@ std::unique_ptr<BandPlane> Algo0x13::compress(const Request& request, std::span<
             const uint8_t* prev2 = (i > 1) ? &data[(i - 2) * wbytes] : nullptr;
 
             jbg85_enc_lineout(&state,
-                              const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(curr)),
-                              const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(prev)),
-                              const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(prev2)));
+                               const_cast<unsigned char*>(curr),
+                               const_cast<unsigned char*>(prev),
+                               const_cast<unsigned char*>(prev2));
         }
 
         // Register the last band
@@ -145,8 +155,10 @@ std::unique_ptr<BandPlane> Algo0x13::compress(const Request& request, std::span<
         _compressed = true;
     }
 
-    if (_list.empty())
-        return nullptr;
+    if (_list.empty()) {
+        ERRORMSG(_("Algo0x13 list empty after compression"));
+        return SP::Unexpected(SP::Error::LogicError);
+    }
 
     auto plane = std::move(_list.front());
     _list.pop_front();
@@ -156,4 +168,3 @@ std::unique_ptr<BandPlane> Algo0x13::compress(const Request& request, std::span<
 #endif /* DISABLE_JBIG */
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
-

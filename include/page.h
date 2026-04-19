@@ -17,13 +17,15 @@
  *
  *  $Id$
  * 
- */#ifndef _PAGE_H_
+ */
+#ifndef _PAGE_H_
 #define _PAGE_H_
 
 #include <memory>
 #include <vector>
 #include <array>
 #include <cstdint>
+#include "sp_result.h"
 
 class Band;
 
@@ -41,20 +43,20 @@ class Band;
 class Page
 {
     protected:
-        uint32_t                            _xResolution;
-        uint32_t                            _yResolution;
-        uint32_t                            _width;
-        uint32_t                            _height;
-        uint8_t                             _colors;
-        uint32_t                            _pageNr;
-        uint32_t                            _copiesNr;
-        uint32_t                            _compression;
+        uint32_t                            _xResolution = 0;
+        uint32_t                            _yResolution = 0;
+        uint32_t                            _width = 0;
+        uint32_t                            _height = 0;
+        uint8_t                             _colors = 0;
+        uint32_t                            _pageNr = 0;
+        uint32_t                            _copiesNr = 0;
+        uint32_t                            _compression = 0;
         std::array<std::vector<uint8_t>, 4> _planes;
-        bool                                _empty;
-        uint32_t                            _bandsNr;
+        bool                                _empty = true;
+        uint32_t                            _bandsNr = 0;
         std::vector<uint8_t>                _bih;
         std::unique_ptr<Band>               _firstBand;
-        Band*                               _lastBand; // Non-owning observer
+        Band*                               _lastBand = nullptr; // Non-owning observer
 
     public:
         /**
@@ -145,8 +147,9 @@ class Page
           * Register a new color plane.
           * @param color the color number
           * @param buffer the plane buffer.
+          * @return a Result indicating success or MemoryError.
           */
-        void                    setPlaneBuffer(uint8_t color,
+        SP::Result<>            setPlaneBuffer(uint8_t color,
                                     std::vector<uint8_t> buffer);
         /**
           * Register a new band.
@@ -230,17 +233,15 @@ class Page
         /**
           * Swap this instance on the disk.
           * @param fd the file descriptor where the instance has to be swapped
-          * @return TRUE if the instance has been successfully swapped. 
-          *         Otherwise it returns FALSE.
+          * @return a Result indicating success or error.
           */
-        bool                    swapToDisk(int fd);
+        SP::Result<>            swapToDisk(int fd);
         /**
           * Restore an instance from the disk into memory.
           * @param fd the file descriptor where the instance has been swapped
-          * @return a page instance if it has been successfully restored. 
-          *         Otherwise it returns NULL.
+          * @return a Result containing the page instance or an error.
           */
-        static std::unique_ptr<Page> restoreIntoMemory(int fd);
+        static SP::Result<std::unique_ptr<Page>> restoreIntoMemory(int fd);
         /**
           * Register an independent copy of the BIH data. 
           * @param bih_data the BIH for JBIG data.

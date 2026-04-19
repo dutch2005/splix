@@ -39,27 +39,27 @@ class Printer
         std::string             _beginPJL;
         std::string             _endPJL;
 
-        bool                    _color;
-        unsigned long           _qpdlVersion;
-        unsigned long           _bandHeight;
-        bool                    _specialBandWidth;
-        unsigned long           _packetSize;
+        bool                    _color = false;
+        unsigned long           _qpdlVersion = 0;
+        unsigned long           _bandHeight = 0;
+        bool                    _specialBandWidth = false;
+        unsigned long           _packetSize = 0;
 
-        unsigned char           _paperType;
-        unsigned char           _paperSource;
+        unsigned char           _paperType = 0;
+        unsigned char           _paperSource = 0;
 
-        float                   _paperWidth;
-        float                   _paperHeight;
+        float                   _paperWidth = 0.0f;
+        float                   _paperHeight = 0.0f;
         
-        unsigned char           _unknownByte1;
-        unsigned char           _unknownByte2;
-        unsigned char           _unknownByte3;
+        unsigned char           _unknownByte1 = 0;
+        unsigned char           _unknownByte2 = 0;
+        unsigned char           _unknownByte3 = 0;
 
-        float                   _pageWidth;
-        float                   _pageHeight;
+        float                   _pageWidth = 0.0f;
+        float                   _pageHeight = 0.0f;
 
-        float                   _hardMarginX;
-        float                   _hardMarginY;
+        float                   _hardMarginX = 0.0f;
+        float                   _hardMarginY = 0.0f;
 
     public:
         /**

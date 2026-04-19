@@ -55,7 +55,7 @@ void Algo0x15::_callback(unsigned char *data, size_t data_len, void *arg)
             compressor->_error = true;
             return;
         }
-        std::memcpy(compressor->_bih.data(), data, 20);
+        std::ranges::copy(std::span(data, 20), compressor->_bih.begin());
         compressor->_has_bih = true;
     } else {  
         if (compressor->_data.size() + data_len > compressor->_maxSize) {
@@ -72,7 +72,6 @@ void Algo0x15::_callback(unsigned char *data, size_t data_len, void *arg)
  * Init - Uninit
  */
 Algo0x15::Algo0x15()
-    : _error(false), _has_bih(false), _maxSize(0)
 {
 }
 
@@ -87,34 +86,62 @@ Algo0x15::Algo0x15()
  * Assumes compressed band data fits in the space specified
  * in the printer PPD file: QPDL PacketSize: "512", specifies 512 Kbytes limit.
  */
-std::unique_ptr<BandPlane> Algo0x15::compress([[maybe_unused]] const Request& request, 
-                                    std::span<const uint8_t> data, uint32_t width,
-                                    uint32_t height)
+SP::Result<std::unique_ptr<BandPlane>> Algo0x15::compress([[maybe_unused]] const Request& request, 
+                                     std::span<const uint8_t> data, uint32_t width,
+                                     uint32_t height)
 {
     const uint32_t MAX_SIZE_LIMIT = 512 * 1024;
     jbg85_enc_state state;
     uint32_t wbytes;
 
-    if (data.empty() || !width || !height) {
+    // Input sanitization
+    if (width > 32768 || height > 32768 || width == 0 || height == 0) {
+        ERRORMSG(_("Invalid raster dimensions for Algo0x15: %ux%u"), width, height);
+        return SP::Unexpected(SP::Error::InvalidArgument);
+    }
+
+    if (data.empty()) {
         ERRORMSG(_("Invalid given data for compression (0x15)"));
-        return nullptr;
+        return SP::Unexpected(SP::Error::InvalidArgument);
     }
 
     _has_bih = false;
     _data.clear();
     _error = false;
+    _errorCode = SP::Error::None;
 
-    if (0 == _maxSize)
+    if (0 == _maxSize) {
+        if (!request.printer()) {
+            return SP::Unexpected(SP::Error::InvalidArgument);
+        }
         _maxSize = static_cast<uint32_t>(request.printer()->packetSize());
+    }
+    
     if ((!_maxSize) || (_maxSize > MAX_SIZE_LIMIT)) {
         ERRORMSG(_("PacketSize is set to %u Bytes! Reset to %u Bytes."),
-                                                    _maxSize, MAX_SIZE_LIMIT);
+                                                     _maxSize, MAX_SIZE_LIMIT);
         _maxSize = MAX_SIZE_LIMIT;
     }
     
-    _data.reserve(_maxSize);
+    try {
+        _data.reserve(_maxSize);
+    } catch (const std::bad_alloc&) {
+        return SP::Unexpected(SP::Error::MemoryError);
+    }
 
+    // Defensive check: prevent overflow in wbytes calculation
+    if (width > 0x1FFFFFFF) {
+         return SP::Unexpected(SP::Error::RasterDimensionTooLarge);
+    }
     wbytes = (width + 7) / 8;
+
+    // Ensure data span is large enough
+    if (data.size() < static_cast<size_t>(wbytes) * height) {
+        ERRORMSG(_("Data span too small for dimensions: %zu < %u*%u"), 
+                 data.size(), wbytes, height);
+        return SP::Unexpected(SP::Error::InvalidArgument);
+    }
+
     jbg85_enc_init(&state, width, height, _callback, this);
     jbg85_enc_options(&state, JBG_LRLTWO, height, 0);
     for (uint32_t i = 0; i < height; i++) {
@@ -122,14 +149,21 @@ std::unique_ptr<BandPlane> Algo0x15::compress([[maybe_unused]] const Request& re
         const uint8_t* prev = (i > 0) ? &data[(i - 1) * wbytes] : nullptr;
         const uint8_t* prev2 = (i > 1) ? &data[(i - 2) * wbytes] : nullptr;
 
+        /* JBIG85 C API requires non-const pointers; we cast here as we manage 
+           the buffer lifecycle during this call. */
         jbg85_enc_lineout(&state,
-                          const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(curr)),
-                          const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(prev)),
-                          const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(prev2)));
+                          const_cast<unsigned char*>(curr),
+                          const_cast<unsigned char*>(prev),
+                          const_cast<unsigned char*>(prev2));
+        
+        if (_error) {
+             break;
+        }
     }
 
-    if (_error)
-        return nullptr;
+    if (_error) {
+        return SP::Unexpected(_errorCode != SP::Error::None ? _errorCode : SP::Error::LogicError);
+    }
 
     auto plane = std::make_unique<BandPlane>();
     plane->setCompression(0x15);
@@ -139,10 +173,6 @@ std::unique_ptr<BandPlane> Algo0x15::compress([[maybe_unused]] const Request& re
     /* Finished encoding of this band. */
     DEBUGMSG(_("Band encoded with type=0x15, size=%zu"), plane->dataSize());
     
-    /* Clean up for getBIHdata context if needed, though getBIHdata is called AFTER compress */
-    // _has_bih is true after callback, we should keep it for getBIHdata?
-    // The original code reset it at the end.
-    _has_bih = false;
     return plane;
 }
 

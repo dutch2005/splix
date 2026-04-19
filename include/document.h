@@ -21,9 +21,9 @@
 #ifndef _DOCUMENT_H_
 #define _DOCUMENT_H_
 
-#include <cups/raster.h>
 #include <memory>
-#include <cstdint>
+#include <cups/raster.h>
+#include "sp_result.h"
 
 class Page;
 class Request;
@@ -45,18 +45,18 @@ class Document
 
     protected:
         std::unique_ptr<cups_raster_t, RasterDeleter> _raster;
-        uint32_t                                      _currentPage;
-        bool                                          _lastPage;
+        uint32_t                                      _currentPage = 1;
+        bool                                          _lastPage = false;
 
     public:
         /**
           * Initialize the instance.
           */
-        Document();
+        Document() = default;
         /**
           * Destroy the instance.
           */
-        virtual ~Document();
+        virtual ~Document() = default;
 
     public:
         /**
@@ -64,20 +64,17 @@ class Document
           * The file have to be opened on the file descriptor 0 (STDIN_FILENO)
           * and be formatted as CUPS Raster.
           * @param request the request instance
-          * @return TRUE if it has been successfully opened. Otherwise it
-          *         returns FALSE.
+          * @return a Result indicating success or error.
           */
-        bool                    load(const Request& request);
+        SP::Result<>            load(const Request& request);
 
         /**
           * Load the next page into memory and store all the needed information
           * in a @ref Page instance.
-          * If the page is empty, it means there is no more pages (check the
-          * @ref noMorePages method) or there is an error.
           * @param request the request instance
-          * @return a @ref Page instance containing the current page.
+          * @return a @ref Page instance containing the current page or a specific error.
           */
-        std::unique_ptr<Page>   getNextRawPage(const Request& request);
+        SP::Result<std::unique_ptr<Page>> getNextRawPage(const Request& request);
         /**
           * @return the number of pages or 0 if its number is not yet known.
           */

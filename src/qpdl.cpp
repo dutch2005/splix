@@ -19,6 +19,7 @@
  * 
  */
 #include "qpdl.h"
+#include "sp_result.h"
 #include <errno.h>
 #include <unistd.h>
 #include <inttypes.h>
@@ -34,7 +35,7 @@
 #include <vector>
 
 /* Support function for algorithm of type 0x15 printers. */
-static bool _outputAuxRecords(const Page* page)
+static SP::Result<> _outputAuxRecords(const Page* page)
 {
     // Get the first plane containing plane data.
     const Band *band = page->firstBand();
@@ -43,50 +44,47 @@ static bool _outputAuxRecords(const Page* page)
         0, 0, 0, 0, 0, 0, 0, 0x14 
     };
     if (!band)
-        return true;
+        return {};
 
     // Output record type 0x13 and marker for record 0x14 .
     if (write(STDOUT_FILENO, header.data(), header.size()) == -1) {
         ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-        return false;
+        return SP::Unexpected(SP::Error::IOError);
     }
     // Output BIH of JBIG data.
     if (page->getBIH()) {
         if (write(STDOUT_FILENO, page->getBIH(), 20) == -1) {
             ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return false;
+            return SP::Unexpected(SP::Error::IOError);
         }
     } else {
         ERRORMSG(_("Error getting BIH data for page (%u)"), errno);
-        return false;
+        return SP::Unexpected(SP::Error::InconsistentData);
     }
     header[0] = 0; header[1] = 0; header[2] = 1;
     header[3] = static_cast<unsigned char>((band->width() >> 8) + 65);
     if (write(STDOUT_FILENO, header.data(), 4) == -1) {
         ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-        return false;
+        return SP::Unexpected(SP::Error::IOError);
     }
-    return true;
+    return {};
 }
 
-static bool _renderJBIGBand([[maybe_unused]] const Request& request, const Band* band, bool mono)
+static SP::Result<> _renderJBIGBand([[maybe_unused]] const Request& request, const Band* band, bool mono)
 {
     std::array<unsigned char, 0xc> header;
     // Black=4, Cyan=1, Magenta=2, Yellow=3
     int color_order[ 4 ] = { 4, 1, 2, 3 };
     int colorsNr = mono ? 1:4;
     unsigned long dataSize, checkSum, lineBytes;
-    const BandPlane *plane = NULL;
+    const BandPlane *plane = nullptr;
     // Cycle through each color planes 
     for ( int j = 0; j < colorsNr; j++ ) {
         int current_color = color_order[ j ];
         // Search in the current band, a plane of current color.
-        plane = NULL;
-        for (unsigned int i = 0; i < band->planesNr(); i++) {
-            const BandPlane * search_plane = band->plane(i);
-            if (!search_plane)
-                continue;
-            if (current_color == search_plane->colorNr()) {
+        plane = nullptr;
+        for (const BandPlane* search_plane : band->planes()) {
+            if (search_plane && current_color == search_plane->colorNr()) {
                 plane = search_plane;
                 break;
             }
@@ -113,12 +111,13 @@ static bool _renderJBIGBand([[maybe_unused]] const Request& request, const Band*
         header[0xb] = static_cast<unsigned char>(dataSize);                  // Data size 0 - 7
         if (write(STDOUT_FILENO, header.data(), 0xc) == -1) {
             ERRORMSG(_("Error while sending data (%u)"), errno);
-            return false;
+            return SP::Unexpected(SP::Error::IOError);
         }
         // Send the data
-        if (write(STDOUT_FILENO, plane->data(), plane->dataSize()) == -1) {
+        auto pSpan = plane->data_span();
+        if (write(STDOUT_FILENO, pSpan.data(), pSpan.size()) == -1) {
             ERRORMSG(_("Error while sending data (%u)"), errno);
-            return false;
+            return SP::Unexpected(SP::Error::IOError);
         }
         // Calculate and send the checksum
         checkSum  = plane->checksum();
@@ -128,13 +127,13 @@ static bool _renderJBIGBand([[maybe_unused]] const Request& request, const Band*
         header[3] = static_cast<unsigned char>(checkSum);                    // Checksum 0 - 7
         if (write(STDOUT_FILENO, header.data(), 4) == -1) {
             ERRORMSG(_("Error while sending data (%u)"), errno);
-            return false;
+            return SP::Unexpected(SP::Error::IOError);
         }
     }
-    return true;
+    return {};
 }
 
-static bool _renderBand(const Request& request, const Band* band, bool mono)
+static SP::Result<> _renderBand(const Request& request, const Band* band, bool mono)
 {
     unsigned long version, subVersion, size, dataSize, checkSum;
     bool color, headerSent=false;
@@ -145,15 +144,14 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
     color = request.printer()->color();
     subVersion = band->parent()->compression() == 0x13 ? 3 : 0;
 
-    for (unsigned int i=0; i < band->planesNr(); i++) {
+    size_t planeIdx = 0;
+    for (const BandPlane* plane : band->planes()) {
         unsigned long compression;
         bool nextBand = false;
 
-        // Get the plane
-        plane = band->plane(i);
         if (!plane) {
             ERRORMSG(_("Inconsistent data. Operation aborted"));
-            return false;
+            return SP::Unexpected(SP::Error::InconsistentData);
         }
         compression = plane->compression();
         checkSum = plane->checksum();
@@ -176,7 +174,7 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
         }
 
         // Calculate the data size
-        dataSize = plane->dataSize();
+        dataSize = static_cast<unsigned long>(plane->data_span().size());
         if (compression != 0x0D && compression != 0x0E)
             dataSize += 4;              // Data signature
         if (version > 0) {
@@ -210,7 +208,7 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
         header[size+4] = static_cast<unsigned char>(dataSize);                  // Data size 0 - 7
         if (write(STDOUT_FILENO, header.data(), size+5) == -1) {
             ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return false;
+            return SP::Unexpected(SP::Error::IOError);
         }
 
         // Send the sub-header
@@ -242,6 +240,8 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
             size = 4;
             if (subVersion == 3) {
                 uint32_t state;
+                auto pSpan = plane->data_span();
+                size_t dSize = pSpan.size();
 
                 checkSum += 0x39 + 0xAB + 0xCD + 0xEF;
                 if (!band->bandNr())
@@ -257,11 +257,11 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
 
                 switch (plane->endian()) {
                     case BandPlane::Endian::Dependant: {
-                        uint32_t dSize = static_cast<uint32_t>(plane->dataSize());
-                        header[size+0] = static_cast<unsigned char>(dSize >> 24);
-                        header[size+1] = static_cast<unsigned char>(dSize >> 16);
-                        header[size+2] = static_cast<unsigned char>(dSize >> 8);
-                        header[size+3] = static_cast<unsigned char>(dSize);
+                        uint32_t udSize = static_cast<uint32_t>(dSize);
+                        header[size+0] = static_cast<unsigned char>(udSize >> 24);
+                        header[size+1] = static_cast<unsigned char>(udSize >> 16);
+                        header[size+2] = static_cast<unsigned char>(udSize >> 8);
+                        header[size+3] = static_cast<unsigned char>(udSize);
                         header[size+4] = static_cast<unsigned char>(state >> 24);
                         header[size+5] = static_cast<unsigned char>(state >> 16);
                         header[size+6] = static_cast<unsigned char>(state >> 8);
@@ -270,13 +270,13 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
                     }
                     case BandPlane::Endian::BigEndian:
                         // Data size 24 - 31
-                        header[size+0] = static_cast<unsigned char>(plane->dataSize() >> 24);
+                        header[size+0] = static_cast<unsigned char>(dSize >> 24);
                         // Data size 16 - 23
-                        header[size+1] = static_cast<unsigned char>(plane->dataSize() >> 16);
+                        header[size+1] = static_cast<unsigned char>(dSize >> 16);
                         // Data size 8 - 15
-                        header[size+2] = static_cast<unsigned char>(plane->dataSize() >> 8);
+                        header[size+2] = static_cast<unsigned char>(dSize >> 8);
                         // Data size 0 - 7
-                        header[size+3] = static_cast<unsigned char>(plane->dataSize());
+                        header[size+3] = static_cast<unsigned char>(dSize);
                         // State 24 - 31
                         header[size+4] = static_cast<unsigned char>(state >> 24);
                         // State 16 - 23
@@ -288,13 +288,13 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
                         break;
                     case BandPlane::Endian::LittleEndian:
                         // Data size 0 - 7
-                        header[size+0] = static_cast<unsigned char>(plane->dataSize());
+                        header[size+0] = static_cast<unsigned char>(dSize);
                         // Data size 8 - 15
-                        header[size+1] = static_cast<unsigned char>(plane->dataSize() >> 8);
+                        header[size+1] = static_cast<unsigned char>(dSize >> 8);
                         // Data size 16 - 23
-                        header[size+2] = static_cast<unsigned char>(plane->dataSize() >> 16);
+                        header[size+2] = static_cast<unsigned char>(dSize >> 16);
                         // Data size 24 - 31
-                        header[size+3] = static_cast<unsigned char>(plane->dataSize() >> 24);
+                        header[size+3] = static_cast<unsigned char>(dSize >> 24);
                         // State 0 - 7
                         header[size+4] = static_cast<unsigned char>(state);
                         // State 8 - 15
@@ -314,14 +314,15 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
             if (write(STDOUT_FILENO, header.data(), size) == -1) {
                 ERRORMSG(_("Error while sending data to the printer (%u)"),
                     errno);
-                return false;
+                return SP::Unexpected(SP::Error::IOError);
             }
         }
         
         // Send the data
-        if (write(STDOUT_FILENO, plane->data(), plane->dataSize()) == -1) {
+        auto pSpan = plane->data_span();
+        if (write(STDOUT_FILENO, pSpan.data(), pSpan.size()) == -1) {
             ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return false;
+            return SP::Unexpected(SP::Error::IOError);
         }
 
         // Send the checksum
@@ -332,31 +333,32 @@ static bool _renderBand(const Request& request, const Band* band, bool mono)
         size = 4;
             // Close the plane if needed
         if (color && (version == 1 || version == 5) && 
-            (i+1) == band->planesNr()) {
+            (planeIdx + 1) == band->planesNr()) {
             header[4] = 0;
             size++;
         }
         if (write(STDOUT_FILENO, header.data(), size) == -1) {
             ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return false;
+            return SP::Unexpected(SP::Error::IOError);
         }
+        planeIdx++;
     }
 
-    return true;
+    return {};
 }
 
-bool renderPage(const Request& request, Page* page, bool lastPage)
+SP::Result<> renderPage(const Request& request, Page* page, bool lastPage)
 {
     unsigned char duplex=0, tumble=0, paperSource=1;
     unsigned long width, height;
     std::array<unsigned char, 0x11> header;
     const Band* band;
-    bool (*selectedRenderBand)(const Request&, const Band*, bool);
+    SP::Result<> (*selectedRenderBand)(const Request&, const Band*, bool);
     
 
     if (!page) {
         ERRORMSG(_("Try to render a NULL page"));
-        return false;
+        return SP::Unexpected(SP::Error::InconsistentData);
     }
 
     // Get the duplex values
@@ -412,27 +414,12 @@ bool renderPage(const Request& request, Page* page, bool lastPage)
     header[0x8] = static_cast<unsigned char>(height);                           // Printable area height
     header[0x9] = static_cast<unsigned char>(paperSource);                      // Paper source
     header[0xa] = static_cast<unsigned char>(request.printer()->unknownByte1());// ??? XXX
-    header[0xb] = static_cast<unsigned char>(duplex);                           // Duplex
-    header[0xc] = static_cast<unsigned char>(tumble);                           // Tumble
-    header[0xd] = static_cast<unsigned char>(request.printer()->unknownByte2());// ??? XXX
-    header[0xe] = static_cast<unsigned char>(request.printer()->qpdlVersion()); // QPDL Version
-    header[0xf] = static_cast<unsigned char>(request.printer()->unknownByte3());// ??? XXX
-    header[0x10] = static_cast<unsigned char>(page->xResolution() / 100);       // X Resolution
-    if (write(STDOUT_FILENO, header.data(), 0x11) == -1) {
-        ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-        return false;
-    }
-
-    // Send auxiliary records for clp-315 printers.
-    if (0x15 == page->compression())
-        if (!_outputAuxRecords(page))
-            return false;
-
     // Send the page bands
     band = page->firstBand();
     while (band) {
-        if (!selectedRenderBand(request, band, page->colorsNr() == 1))
-            return false;
+        auto res = selectedRenderBand(request, band, page->colorsNr() == 1);
+        if (!res)
+            return res;
         band = band->sibling();
     }
 
@@ -442,10 +429,10 @@ bool renderPage(const Request& request, Page* page, bool lastPage)
     header[0x2] = static_cast<unsigned char>(page->copiesNr());                 // Number of copies 0-7
     if (write(STDOUT_FILENO, header.data(), 0x3) == -1) {
         ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-        return false;
+        return SP::Unexpected(SP::Error::IOError);
     }
 
-    return true;
+    return {};
 }
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */

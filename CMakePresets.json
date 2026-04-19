@@ -1,5 +1,5 @@
 {
-    "version": 6,
+    "version": 3,
     "cmakeMinimumRequired": { "major": 3, "minor": 16, "patch": 0 },
 
     "configurePresets": [
@@ -100,56 +100,27 @@
     "buildPresets": [
         {
             "name": "linux-amd64-release",
-            "configurePreset": "linux-amd64-release",
-            "jobs": 0
+            "configurePreset": "linux-amd64-release"
         },
         {
             "name": "linux-arm64-release",
-            "configurePreset": "linux-arm64-release",
-            "jobs": 0
+            "configurePreset": "linux-arm64-release"
         },
         {
             "name": "linux-debug",
-            "configurePreset": "linux-debug",
-            "jobs": 0
+            "configurePreset": "linux-debug"
         },
         {
             "name": "linux-asan",
-            "configurePreset": "linux-asan",
-            "jobs": 0
+            "configurePreset": "linux-asan"
         },
         {
             "name": "ci-amd64",
-            "configurePreset": "ci-amd64",
-            "jobs": 0
+            "configurePreset": "ci-amd64"
         },
         {
             "name": "ci-arm64",
-            "configurePreset": "ci-arm64",
-            "jobs": 0
-        }
-    ],
-
-    "packagePresets": [
-        {
-            "name": "linux-amd64-release",
-            "configurePreset": "linux-amd64-release",
-            "generators": ["DEB"]
-        },
-        {
-            "name": "linux-arm64-release",
-            "configurePreset": "linux-arm64-release",
-            "generators": ["DEB"]
-        },
-        {
-            "name": "ci-amd64",
-            "configurePreset": "ci-amd64",
-            "generators": ["DEB"]
-        },
-        {
-            "name": "ci-arm64",
-            "configurePreset": "ci-arm64",
-            "generators": ["DEB"]
+            "configurePreset": "ci-arm64"
         }
     ]
 }

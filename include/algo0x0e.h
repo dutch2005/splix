@@ -56,16 +56,16 @@ class Algo0x0E : public Algorithm
                                                  std::span<const uint8_t> data);
 
     public:
-        Algo0x0E();
-        virtual ~Algo0x0E();
+        Algo0x0E() = default;
+        virtual ~Algo0x0E() = default;
 
     public:
-        virtual std::unique_ptr<BandPlane> compress(const Request& request, 
+        virtual SP::Result<std::unique_ptr<BandPlane>> compress(const Request& request, 
                                     std::span<const uint8_t> data, uint32_t width,
                                     uint32_t height) override;
-        virtual bool            reverseLineColumn() override {return false;}
-        virtual bool            inverseByte() override {return true;}
-        virtual bool            splitIntoBands() override {return true;}
+        virtual bool            reverseLineColumn() const override {return false;}
+        virtual bool            inverseByte() const override {return true;}
+        virtual bool            splitIntoBands() const override {return true;}
 };
 
 #endif /* _ALGO0x0E_H_ */

@@ -21,14 +21,17 @@
 #include "ppdfile.h"
 #include "errlog.h"
 #include "version.h"
-#include <ctype.h>
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
+#include "sp_portable.h"
+#include <cctype>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <sys/types.h>
+
+#if defined(SP_PLATFORM_POSIX)
+    #include <sys/wait.h>
+#endif
 #include <string>
 #include <algorithm>
 #include <filesystem>
@@ -70,7 +73,7 @@ static int _linkFilters(const char *arg1, const char *arg2, const char *arg3,
         dup2(rasterOutput[0], STDIN_FILENO);
         close(rasterOutput[0]);
         execl(RASTERDIR "/" RASTERTOQPDL, RASTERDIR "/" RASTERTOQPDL, arg1, 
-            arg2, arg3, arg4, arg5, (char *)NULL);
+            arg2, arg3, arg4, arg5, static_cast<char*>(nullptr));
         ERRORMSG(_("Cannot execute rastertoqpdl (%i)"), errno);
         _exit(EXIT_FAILURE);
     }
@@ -89,12 +92,12 @@ static int _linkFilters(const char *arg1, const char *arg2, const char *arg3,
         if (access(RASTERDIR "/" GSTORASTER, F_OK) != -1) {
             // gstoraster filter exists
             execl(RASTERDIR "/" GSTORASTER, RASTERDIR "/" GSTORASTER, arg1, arg2, 
-                arg3, arg4, arg5,(char *)NULL);
+                arg3, arg4, arg5, static_cast<char*>(nullptr));
             ERRORMSG(_("Cannot execute gstoraster (%i)"), errno);
         } else {
             // use pstoraster if gstoraster doesn't exist
             execl(RASTERDIR "/" PSTORASTER, RASTERDIR "/" PSTORASTER, arg1, arg2, 
-                arg3, arg4, arg5,(char *)NULL);
+                arg3, arg4, arg5, static_cast<char*>(nullptr));
             ERRORMSG(_("Cannot execute %s (%i)"), PSTORASTER, errno);
         }
         _exit(EXIT_FAILURE);
@@ -208,7 +211,7 @@ int main(int argc, char **argv)
     title = argv[3];
     options = argv[5];
     file = argc == 7 ? argv[6] : NULL;
-    copies = strtol(argv[4], reinterpret_cast<char **>(NULL), 10);
+    copies = strtol(argv[4], nullptr, 10);
     ppdFile = getenv("PPD");
 
     // Get more information on the SpliX environment (for debugging)
@@ -222,11 +225,13 @@ int main(int argc, char **argv)
     }
 
     // Open the PPD file and get paper information
-    if (!ppd.open(ppdFile, PPDVERSION, options))
+    if (auto res = ppd.open(ppdFile ? ppdFile : "", PPDVERSION, options); !res) {
+        ERRORMSG(_("Failed to open PPD file: %s"), SP::to_string(res.error()).data());
         return 1;
+    }
     manufacturer = _toLower(static_cast<const char *>(ppd.get("Manufacturer")));
     paperType = ppd.get("MediaType");
-    if (!(strcasecmp(paperType, "OFF")))
+    if (!(SP_STRCASECMP(paperType, "OFF")))
         paperType = "NORMAL";
 
     // Call the other filters
@@ -241,9 +246,9 @@ int main(int argc, char **argv)
     if (crd.empty() || csa.empty()) {
         WARNMSG(_("CMS data are missing. Color correction aborted"));
         while (!(feof(stdin))) {
-            if (!fgets(reinterpret_cast<char *>(&buffer), sizeof(buffer), stdin))
+            if (!fgets(buffer, sizeof(buffer), stdin))
                 break;
-            fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer)); 
+            fprintf(stdout, "%s", buffer); 
         }
     } else {
 
@@ -268,11 +273,11 @@ int main(int argc, char **argv)
         while (!(feof(stdin))) {
 
             // read a line of the input file
-            if (!fgets(reinterpret_cast<char *>(&buffer), sizeof(buffer), stdin))
+            if (!fgets(buffer, sizeof(buffer), stdin))
                 break;
 
-            if (!(memcmp("%%Creator", reinterpret_cast<char *>(&buffer), 9)) ||
-                !(memcmp("%%LanguageLevel:", reinterpret_cast<char *>(&buffer), 16))) {
+            if (!(memcmp("%%Creator", buffer, 9)) ||
+                !(memcmp("%%LanguageLevel:", buffer, 16))) {
                 // found a "%%Creator" line
 
                 // emit the MediaChoice and colour correction information
@@ -282,14 +287,14 @@ int main(int argc, char **argv)
                 fprintf(stdout, "%s", csa.c_str());
 
                 // emit the original "%%Creator" line
-                fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer)); 
+                fprintf(stdout, "%s", buffer); 
 
                 // stop scanning the header
                 break;
             }
 
 
-            if (!(memcmp("%%EndComments", reinterpret_cast<char *>(&buffer), 13))) {
+            if (!(memcmp("%%EndComments", buffer, 13))) {
                 // reached end of header without finding a "%%Creator" line
 
                 // emit the MediaChoice and colour correction information
@@ -303,55 +308,55 @@ int main(int argc, char **argv)
                 fprintf(stdout, "%s", "%%Creator: SpliX pstoqpdl filter");
 
                 // emit the original "%%EndComments" line
-                fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer));
+                fprintf(stdout, "%s", buffer);
 
                 // stop scanning the header
                 break;
             }
 
 
-            if (!(memcmp("%%BeginPro", reinterpret_cast<char *>(&buffer), 10)) ||
-                !(memcmp("%%BeginRes", reinterpret_cast<char *>(&buffer), 10))) {
+            if (!(memcmp("%%BeginPro", buffer, 10)) ||
+                !(memcmp("%%BeginRes", buffer, 10))) {
                 // we shouldn't find either of these lines in the header
 
                 ERRORMSG(_("End of PostScript header not found"));
 
                 // emit the line that was found
-                fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer)); 
+                fprintf(stdout, "%s", buffer); 
 
                 // stop scanning the header
                 break;
             }
 
             // encountered some other kind of header line - just emit it
-            fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer)); 
+            fprintf(stdout, "%s", buffer); 
         }
 
 
         // Check for each page
         while (!(feof(stdin))) {
-            if (!fgets(reinterpret_cast<char *>(&buffer), sizeof(buffer), stdin))
+            if (!fgets(buffer, sizeof(buffer), stdin))
                 break;
-            if (!(memcmp("%%Page:", reinterpret_cast<char *>(&buffer), 7))) {
+            if (!(memcmp("%%Page:", buffer, 7))) {
                 char tmp[sizeof(buffer)];
 
-                if (!fgets(reinterpret_cast<char *>(&tmp), sizeof(tmp), stdin)) {
-                    fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer));
+                if (!fgets(tmp, sizeof(tmp), stdin)) {
+                    fprintf(stdout, "%s", buffer);
                     break;
                 }
-                if (!(memcmp("%%BeginPageSetup", reinterpret_cast<char *>(&tmp), 16)))
+                if (!(memcmp("%%BeginPageSetup", tmp, 16)))
                     pageSetup = true;
                 else
                     fprintf(stdout, "%s", csa.c_str());
-                fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer));
-                fprintf(stdout, "%s", reinterpret_cast<char *>(&tmp));
+                fprintf(stdout, "%s", buffer);
+                fprintf(stdout, "%s", tmp);
             } else if (pageSetup && !(memcmp("%%EndPageSetup", 
-                reinterpret_cast<char *>(&buffer), 14))) {
-                fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer));
+                buffer, 14))) {
+                fprintf(stdout, "%s", buffer);
                 fprintf(stdout, "%s", csa.c_str());
                 pageSetup = false;
             } else 
-                fprintf(stdout, "%s", reinterpret_cast<char *>(&buffer));
+                fprintf(stdout, "%s", buffer);
         }
     }
 

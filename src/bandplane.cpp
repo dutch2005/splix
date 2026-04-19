@@ -19,24 +19,14 @@
  * 
  */
 #include "bandplane.h"
-#include <unistd.h>
+#include "sp_portable.h"
 #include <numeric>
 
 /*
  * Constructeur - Destructeur
  * Init - Uninit 
  */
-BandPlane::BandPlane()
-{
-    _endian = Endian::Dependant;
-    _checksum = 0;
-    _colorNr = 0;
-    _compression = 0;
-}
-
-BandPlane::~BandPlane()
-{
-}
+// LIFECYCLE: Standard constructors and destructors are defaulted in the header via member initializers.
 
 
 /*
@@ -55,32 +45,74 @@ void BandPlane::setData(std::vector<uint8_t> data)
  * Mise sur disque / Rechargement
  * Swapping / restoring
  */
-bool BandPlane::swapToDisk(int fd)
-{
-    size_t size = _data.size();
-    if (write(fd, &_colorNr, sizeof(_colorNr)) == -1) return false;
-    if (write(fd, &size, sizeof(size)) == -1) return false;
-    if (write(fd, _data.data(), size) == -1) return false;
-    if (write(fd, &_checksum, sizeof(_checksum)) == -1) return false;
-    if (write(fd, &_endian, sizeof(_endian)) == -1) return false;
-    if (write(fd, &_compression, sizeof(_compression)) == -1) return false;
-    return true;
+namespace {
+    /**
+     * @brief Helper for robustly writing a fixed-size buffer.
+     */
+    bool writeAll(int fd, const void* data, size_t size) noexcept {
+        const uint8_t* ptr = static_cast<const uint8_t*>(data);
+        while (size > 0) {
+            ssize_t written = write(fd, ptr, size);
+            if (written <= 0) return false;
+            ptr += written;
+            size -= written;
+        }
+        return true;
+    }
+
+    /**
+     * @brief Helper for robustly reading a fixed-size buffer.
+     */
+    bool readAll(int fd, void* data, size_t size) noexcept {
+        uint8_t* ptr = static_cast<uint8_t*>(data);
+        while (size > 0) {
+            ssize_t bytesRead = read(fd, ptr, size);
+            if (bytesRead <= 0) return false;
+            ptr += bytesRead;
+            size -= bytesRead;
+        }
+        return true;
+    }
 }
 
-std::unique_ptr<BandPlane> BandPlane::restoreIntoMemory(int fd)
+SP::Result<> BandPlane::swapToDisk(int fd)
+{
+    const size_t size = _data.size();
+    
+    if (!writeAll(fd, &_colorNr, sizeof(_colorNr))) return SP::Unexpected(SP::Error::IOError);
+    if (!writeAll(fd, &size, sizeof(size))) return SP::Unexpected(SP::Error::IOError);
+    if (!writeAll(fd, _data.data(), size)) return SP::Unexpected(SP::Error::IOError);
+    if (!writeAll(fd, &_checksum, sizeof(_checksum))) return SP::Unexpected(SP::Error::IOError);
+    if (!writeAll(fd, &_endian, sizeof(_endian))) return SP::Unexpected(SP::Error::IOError);
+    if (!writeAll(fd, &_compression, sizeof(_compression))) return SP::Unexpected(SP::Error::IOError);
+    
+    return {};
+}
+
+SP::Result<std::unique_ptr<BandPlane>> BandPlane::restoreIntoMemory(int fd)
 {
     auto plane = std::make_unique<BandPlane>();
     size_t size = 0;
 
-    if (read(fd, &plane->_colorNr, sizeof(plane->_colorNr)) <= 0) return nullptr;
-    if (read(fd, &size, sizeof(size)) <= 0) return nullptr;
+    if (!readAll(fd, &plane->_colorNr, sizeof(plane->_colorNr))) return SP::Unexpected(SP::Error::IOError);
+    if (!readAll(fd, &size, sizeof(size))) return SP::Unexpected(SP::Error::IOError);
     
-    plane->_data.resize(size);
-    if (read(fd, plane->_data.data(), size) <= 0) return nullptr;
+    // Safety check: 512MB cap for cached planes
+    if (size > 1024 * 1024 * 512) {
+        return SP::Unexpected(SP::Error::InconsistentData);
+    }
+
+    try {
+        plane->_data.resize(size);
+    } catch (const std::bad_alloc&) {
+        return SP::Unexpected(SP::Error::MemoryError);
+    }
+
+    if (!readAll(fd, plane->_data.data(), size)) return SP::Unexpected(SP::Error::IOError);
     
-    if (read(fd, &plane->_checksum, sizeof(plane->_checksum)) <= 0) return nullptr;
-    if (read(fd, &plane->_endian, sizeof(plane->_endian)) <= 0) return nullptr;
-    if (read(fd, &plane->_compression, sizeof(plane->_compression)) <= 0) return nullptr;
+    if (!readAll(fd, &plane->_checksum, sizeof(plane->_checksum))) return SP::Unexpected(SP::Error::IOError);
+    if (!readAll(fd, &plane->_endian, sizeof(plane->_endian))) return SP::Unexpected(SP::Error::IOError);
+    if (!readAll(fd, &plane->_compression, sizeof(plane->_compression))) return SP::Unexpected(SP::Error::IOError);
 
     return plane;
 }

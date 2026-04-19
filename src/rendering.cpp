@@ -30,11 +30,12 @@
 #include "document.h"
 
 #ifndef DISABLE_THREADS
-#include <pthread.h>
-#include "sp_semaphore.h"
+#include <thread>
+#include <mutex>
+#include <vector>
 
 static Document document;
-static Semaphore _lock;
+static std::mutex _lock;
 static bool _returnState=true;
 
 /*
@@ -42,22 +43,29 @@ static bool _returnState=true;
  * It compress each page, page by page and store them
  * into the cache
  */
-static void *_compressPage(void* data)
+static void _compressPage(const Request* request)
 {
-    const Request *request = static_cast<const Request *>(data);
     bool rotateEvenPages;
     rotateEvenPages = request->duplex() == Request::ManualLongEdge;
     do {
         // Load the page
         std::unique_ptr<Page> page;
         {
-            _lock.lock();
-            page = document.getNextRawPage(*request);
-            _lock.unlock();
-        }
-        if (!page) {
-            setNumberOfPages(document.numberOfPages());
-            break;
+            std::lock_guard<std::mutex> lock(_lock);
+            auto res = document.getNextRawPage(*request);
+            if (!res) {
+                if (res.error() != SP::Error::EndOfJob) {
+                    ERRORMSG(_("Error while reading page from document: %s"), 
+                        SP::to_string(res.error()).data());
+                    _returnState = false;
+                } else {
+                    fprintf(stderr, ">> Rendering: End of job reached.\n");
+                }
+                setNumberOfPages(document.numberOfPages());
+                break;
+            }
+            page = std::move(*res);
+            fprintf(stderr, ">> Rendering: Compressing page %lu...\n", (unsigned long)page->pageNr());
         }
 
         // Make rotation on even pages for ManualLongEdge duplex mode
@@ -71,12 +79,13 @@ static void *_compressPage(void* data)
 #endif /* DISABLE_BLACKOPTIM */
 
         // Compress the page
-        if (compressPage(*request, page.get())) {
+        auto res = compressPage(*request, page.get());
+        if (res) {
             DEBUGMSG(_("Page %lu has been compressed and is ready for "
                 "rendering"), static_cast<unsigned long>(page->pageNr()));
         } else {
-            ERRORMSG(_("Error while compressing the page. Check the previous "
-                "message. Trying to print the other pages."));
+            ERRORMSG(_("Error while compressing page %lu: %s. Trying to print the other pages."), 
+                static_cast<unsigned long>(page->pageNr()), SP::to_string(res.error()).data());
             page->setEmpty();
             _returnState = false;
         }
@@ -84,14 +93,12 @@ static void *_compressPage(void* data)
     } while (true);
 
     DEBUGMSG(_("Compression thread: work done. See ya"));
-
-    return NULL;
 }
 
 bool render(Request& request)
 {
     bool manualDuplex=false, checkLastPage=false, lastPage=false;
-    pthread_t threads[THREADS];
+    std::vector<std::jthread> threads;
     std::unique_ptr<Page> page;
 
     // Load the document
@@ -102,11 +109,13 @@ bool render(Request& request)
     }
 
     // Load the compression threads
-    for (unsigned int i=0; i < THREADS; i++) {
-        if (pthread_create(&threads[i], nullptr, _compressPage, static_cast<void*>(&request))) {
-            ERRORMSG(_("Cannot load compression threads. Operation aborted."));
-            return false;
+    try {
+        for (unsigned int i=0; i < THREADS; i++) {
+            threads.emplace_back(_compressPage, &request);
         }
+    } catch (const std::system_error& e) {
+        ERRORMSG(_("Cannot load compression threads: %s"), e.what());
+        return false;
     }
 
     // Prepare the manual duplex
@@ -122,7 +131,15 @@ bool render(Request& request)
      * page to render is available (which is very quickly for normal request but
      * can take very long time if a big document in manual duplex is printed).
      */
-    page = getNextPage();
+    {
+        auto res = getNextPage();
+        if (!res) {
+            ERRORMSG(_("Failed to fetch next page from cache: %s"), 
+                     SP::to_string(res.error()).data());
+            return false;
+        }
+        page = std::move(*res);
+    }
 
     // Prevent troubles if the last page is an odd page (in manual duplex mode)
     if (manualDuplex && document.numberOfPages() % 2)
@@ -140,26 +157,29 @@ bool render(Request& request)
         if (checkLastPage && document.numberOfPages() == page->pageNr())
             lastPage = true;
         if (!page->isEmpty()) {
-            if (!renderPage(request, page.get(), lastPage)) {
-                ERRORMSG(_("Error while rendering the page. Check the previous "
-                    "message. Trying to print the other pages."));
+            auto res = renderPage(request, page.get(), lastPage);
+            if (!res) {
+                ERRORMSG(_("Error while rendering the page: %s. Check the previous "
+                    "message. Trying to print the other pages."), SP::to_string(res.error()).data());
                 _returnState = false;
             }
             fprintf(stderr, "PAGE: %lu %lu\n", static_cast<unsigned long>(page->pageNr()), static_cast<unsigned long>(page->copiesNr()));
         }
-        page = getNextPage();
+        auto res = getNextPage();
+        if (!res) {
+             ERRORMSG(_("Failed to fetch next page from cache: %s"), 
+                      SP::to_string(res.error()).data());
+             break;
+        }
+        page = std::move(*res);
     }
 
     // Send the PJL footer
     request.printer()->sendPJLFooter(request);
 
-    // Wait for threads to be finished
-    for (unsigned int i=0; i < THREADS; i++) {
-        void *result;
-
-        if (pthread_join(threads[i], &result))
-            ERRORMSG(_("An error occurred while waiting the end of a thread"));
-    }
+    // Wait for threads to be finished (std::jthread joins automatically, 
+    // but we can join explicitly to handle results if needed)
+    threads.clear(); 
 
     return _returnState;
 }
@@ -171,6 +191,7 @@ bool render(Request& request)
 {
     Document document;
     std::unique_ptr<Page> page;
+    bool returnState = true;
 
     // Load the document
     if (!document.load(request)) {
@@ -180,7 +201,14 @@ bool render(Request& request)
     }
 
     // Get first Page
-    page = document.getNextRawPage(request);
+    {
+        auto res = document.getNextRawPage(request);
+        if (res) page = std::move(*res);
+        else if (res.error() != SP::Error::EndOfJob) {
+             ERRORMSG(_("Error while loading the first page: %s"), SP::to_string(res.error()).data());
+             return false;
+        }
+    }
 
     // Send the PJL Header
     if (page)
@@ -194,21 +222,34 @@ bool render(Request& request)
 #ifndef DISABLE_BLACKOPTIM
         applyBlackOptimization(page.get());
 #endif /* DISABLE_BLACKOPTIM */
-        if (compressPage(request, page.get())) {
-            if (!renderPage(request, page.get()))
-                ERRORMSG(_("Error while rendering the page. Check the previous "
-                            "message. Trying to print the other pages."));
-        } else
-            ERRORMSG(_("Error while compressing the page. Check the previous "
-                "message. Trying to print the other pages."));
+        auto resComp = compressPage(request, page.get());
+        if (resComp) {
+            auto resRender = renderPage(request, page.get());
+            if (!resRender) {
+                ERRORMSG(_("Error while rendering the page: %s. Check the previous "
+                            "message. Trying to print the other pages."), SP::to_string(resRender.error()).data());
+                returnState = false;
+            }
+        } else {
+            ERRORMSG(_("Error while compressing the page: %s. Trying to print the other pages."),
+                SP::to_string(resComp.error()).data());
+            returnState = false;
+        }
         fprintf(stderr, "PAGE: %lu %lu\n", static_cast<unsigned long>(page->pageNr()), static_cast<unsigned long>(page->copiesNr()));
-        page = document.getNextRawPage(request);
+        auto resPrev = document.getNextRawPage(request);
+        if (!resPrev) {
+            if (resPrev.error() != SP::Error::EndOfJob) {
+                ERRORMSG(_("Error while loading next page: %s"), SP::to_string(resPrev.error()).data());
+            }
+            break;
+        }
+        page = std::move(*resPrev);
     }
 
     // Send the PJL footer
     request.printer()->sendPJLFooter(request);
 
-    return true;
+    return returnState;
 }
 
 #endif /* DISABLE_THREADS */

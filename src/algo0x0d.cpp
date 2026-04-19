@@ -22,8 +22,9 @@
  * This code is written by Leonardo Hamada
  */
 #include "algo0x0d.h"
-#include <new>
-#include <string.h>
+#include <cstring>
+#include <algorithm>
+#include <span>
 #include "errlog.h"
 #include "request.h"
 #include "printer.h"
@@ -31,16 +32,7 @@
 
 
 
-/*
- * Constructor.
- */
-Algo0x0D::Algo0x0D()
-{
-}
-
-Algo0x0D::~Algo0x0D()
-{
-}
+// LIFECYCLE: Managed by compiler defaults in the header.
 
 
 
@@ -198,20 +190,26 @@ inline void Algo0x0D::selectPacketSize(
 /*
  * Main algorithm 0xd encoder.
  */
-std::unique_ptr<BandPlane> Algo0x0D::compress([[maybe_unused]] const Request & request, std::span<const uint8_t> data,
+SP::Result<std::unique_ptr<BandPlane>> Algo0x0D::compress(const Request& request, std::span<const uint8_t> data,
         uint32_t width, uint32_t height)
 {
     /* Basic parameters validation. */
-    if ( data.empty() || !height || !width ) {
+    if (data.empty() || !height || !width ) {
         ERRORMSG(_("Invalid given data for compression: 0xd"));
-        return nullptr;
+        return SP::Unexpected(SP::Error::InvalidArgument);
     }
 
-    /* We will interpret the band heigth of 128 pixels as 600 DPI printing
+    /* Input sanitization: prevent absurd dimensions that could lead to overflow or resource exhaustion. */
+    if (width > 65536 || height > 65536) {
+        ERRORMSG(_("Absurd dimensions for compression: %u x %u"), width, height);
+        return SP::Unexpected(SP::Error::InvalidArgument);
+    }
+
+    /* We will interpret the band height of 128 pixels as 600 DPI printing
      request. Likewise, height of 64 pixels as 300 DPI printing. */
     if ( ! ( 128 == height || 64 == height ) ) {
         ERRORMSG(_("Invalid band height for compression: 0xd"));
-        return nullptr;
+        return SP::Unexpected(SP::Error::InvalidArgument);
     }
 
     /* Set the hardware wrapping width for six-byte type packet format. */
@@ -228,9 +226,21 @@ std::unique_ptr<BandPlane> Algo0x0D::compress([[maybe_unused]] const Request & r
     const uint32_t maximumBufferSize = ( 64 == height ) ?
         256 * height + 4: 128 * height + 4;
 
+    /* Safety cap on buffer size (512MB) to prevent OOM attacks. */
+    if (maximumBufferSize > 512 * 1024 * 1024) {
+        ERRORMSG(_("Compression buffer size exceeds safety limit: %u"), maximumBufferSize);
+        return SP::Unexpected(SP::Error::MemoryError);
+    }
+
     /* Create the output buffer for work. */
     std::vector<uint8_t> output;
-    output.reserve(maximumBufferSize);
+    try {
+        output.reserve(maximumBufferSize);
+    } catch (const std::bad_alloc&) {
+        ERRORMSG(_("Failed to allocate compression buffer for 0xd"));
+        return SP::Unexpected(SP::Error::MemoryError);
+    }
+
 
     /* Encoded data size of current scan-line. */
     uint32_t encodedScanLineSize = 0;
@@ -270,101 +280,76 @@ std::unique_ptr<BandPlane> Algo0x0D::compress([[maybe_unused]] const Request & r
     /* Number of pixels left to be processed in the scanline. */
     uint32_t pixelsLeftInScanline = workWidth;
 
-    /* Number of acumulated consecutive blank scanline. */
+    /* Number of accumulated consecutive blank scanline. */
     uint32_t consecutiveBlankScanLines = 0;
 
-    /* Pointer to current scanline data */
-    const uint8_t* scanlineData = data.data();
+    /* Current scanline view */
+    std::span<const uint8_t> scanline = data;
+    /* Main encoding loop. */
+    while (currentVerticalPenPosition < height) {
+        
+        auto scanBits = [&](bool targetSet) -> uint32_t {
+            uint32_t count = 0;
+            while (rowByteIndex < workWidthRowBytes) {
+                if (rowByteIndex >= scanline.size()) {
+                    /* If we run out of input data before finishing the scanline, 
+                       we must stop to avoid an infinite loop. */
+                    pixelsLeftInScanline = 0; 
+                    return count;
+                }
 
-    /* Main encoding loop. */
-    while ( currentVerticalPenPosition < height ) {
+                bool isSet = (bitMask & scanline[rowByteIndex]) != 0;
+                if (isSet == targetSet && pixelsLeftInScanline > 0) {
+                    count++;
+                    pixelsLeftInScanline--;
+                } else {
+                    break;
+                }
 
-        /* Scan for offset value. */
-        while ( rowByteIndex < workWidthRowBytes ) {
-
-            /* Check current byte data against the mask for a unset bit. */
-            if ( ( 0 == ( bitMask & scanlineData[ rowByteIndex ] ) ) &&
-                                                 ( pixelsLeftInScanline > 0 ) ) {
-                /* Account for a blank pixel. */
-                accumulatedHorizontalOffsetValue++;
-
-                /* Make a discount for previous processed pixel. */
-                pixelsLeftInScanline--;
-            } else {
-                /* Exit current loop for scanning of offset values. */
-                break;
+                bitMask >>= 1;
+                if (0 == bitMask) {
+                    bitMask = 0x80;
+                    rowByteIndex++;
+                }
             }
+            return count;
+        };
 
-            /* Rotating the bit mask. */
-            bitMask >>= 1;
+        /* Scan for offset value (unset bits). */
+        accumulatedHorizontalOffsetValue = scanBits(false);
 
-            /* Reset the mask if needed. */
-            if ( 0 == bitMask ) {
-                bitMask = 0x80;
-
-                /* Advance the row byte index. */
-                rowByteIndex++;
-            }
-        }
-
-        /* Now, scan for run count. */
-        while ( rowByteIndex < workWidthRowBytes ) {
-
-            /* Check byte against the mask for an one-bit (set) value. */
-            if ( ( 0 != ( bitMask & scanlineData[ rowByteIndex ] ) ) &&
-                                             ( pixelsLeftInScanline > 0 ) ) {
-                /* Account for a black pixel. */
-                accumulatedRunCount++;
-
-                /* Make a discount for previous processed pixel. */
-                pixelsLeftInScanline--;
-            } else {
-                /* Exit current loop for scanning of run count. */
-                break;
-            }
-
-            /* Rotating the bit mask. */
-            bitMask >>= 1;
-
-            /* Reset the mask if needed. */
-            if ( 0 == bitMask ) {
-                bitMask = 0x80;
-
-                /* Advance the row byte index. */
-                rowByteIndex++;
-            }
-        }
+        /* Now, scan for run count (set bits). */
+        accumulatedRunCount = scanBits(true);
 
         /* We have an offset value and a run count pair. */
         /* Verify if it's a blank scanline before proceeding. */
-        if ( ( accumulatedHorizontalOffsetValue == workWidth ) &&
-                                            ( 0 == accumulatedRunCount ) ) {
+        if ((accumulatedHorizontalOffsetValue == workWidth) && (0 == accumulatedRunCount)) {
             /* We encountered a blank scanline, so account for it. */
             consecutiveBlankScanLines++;
-        } else if ( 0 < accumulatedRunCount ) {
+        } else if (0 < accumulatedRunCount) {
 
             /* We have pixels to encode, proceed. */
             size_t previousOutputSize = output.size();
 
-            if ( output.size() + 6 + 4  <= maximumBufferSize ) {
-                selectPacketSize( output,
+            if (output.size() + 10 <= maximumBufferSize) {
+                selectPacketSize(output,
                         preAccumulatedHorizontalOffsetValue,
                         accumulatedHorizontalOffsetValue,
                         currentHorizontalPenPosition,
                         accumulatedRunCount, consecutiveBlankScanLines,
-                        currentVerticalPenPosition, wrapWidth );
+                        currentVerticalPenPosition, wrapWidth);
             } else {
                 /* Here we failed. Unlikely. */
                 ERRORMSG(_("Out of buffer space: 0xd"));
-                return nullptr;
+                return SP::Unexpected(SP::Error::MemoryError);
             }
 
-            encodedScanLineSize += static_cast<uint32_t>( output.size() - previousOutputSize );
+            encodedScanLineSize += static_cast<uint32_t>(output.size() - previousOutputSize);
 
-            if ( maxEncodedBytesPerScanLine < encodedScanLineSize ) {
+            if (maxEncodedBytesPerScanLine < encodedScanLineSize) {
                 /* We did not fail, but gave up because data is unsuited for
-                 encoding by this algorithm. */
-                return nullptr;
+                  encoding by this algorithm. */
+                return SP::Unexpected(SP::Error::LogicError);
             }
 
             /* After encoding, reset the blank scan-line counter. */
@@ -378,11 +363,15 @@ std::unique_ptr<BandPlane> Algo0x0D::compress([[maybe_unused]] const Request & r
             preAccumulatedHorizontalOffsetValue = accumulatedRunCount;
         }
 
-        if ( 0 == pixelsLeftInScanline ) {
+        if (0 == pixelsLeftInScanline) {
             /* Advance the vertical pen position. */
-            if ( ++currentVerticalPenPosition < height ) {
+            if (++currentVerticalPenPosition < height) {
                 /* No more pixels left in this scan-line, so go to the next one. */
-                scanlineData = &scanlineData[ rowBytes ];
+                if (scanline.size() > rowBytes) {
+                    scanline = scanline.subspan(rowBytes);
+                } else {
+                    scanline = {}; // Safety: end of data
+                }
             }
 
             /* Re-initialize the encoded scan-line data size tracker to zero. */
@@ -407,18 +396,18 @@ std::unique_ptr<BandPlane> Algo0x0D::compress([[maybe_unused]] const Request & r
     }
 
     /* Zero value byte padding for data size alignment to 4-byte boundary. */
-    uint32_t zerosPad = 4 - ( static_cast<uint32_t>(output.size()) % 4 );
+    uint32_t zerosPad = 4 - (static_cast<uint32_t>(output.size()) % 4);
 
     /* Pad anyway even if already aligned. */
-    if ( output.size() + zerosPad <= maximumBufferSize ) {
-        while ( zerosPad-- ) {
-            output.push_back(0);
+    if (zerosPad > 0 && zerosPad < 4) {
+        if (output.size() + zerosPad <= maximumBufferSize) {
+            output.insert(output.end(), zerosPad, 0);
+        } else {
+            ERRORMSG(_("No buffer during padding: 0xd"));
+            return SP::Unexpected(SP::Error::MemoryError);
         }
-    } else {
-        /* Here we failed. Unlikely. */
-        ERRORMSG(_("No buffer during padding: 0xd"));
-        return nullptr;
     }
+
 
     /* Prepare to return data encoded by algorithm 0xd. */
     auto plane = std::make_unique<BandPlane>();

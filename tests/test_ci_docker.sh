@@ -44,11 +44,14 @@ docker run --rm \
     rm -rf build/
     cmake --preset "${CMAKE_PRESET}"
 
-    echo " [2/3] Compiling..."
+    echo " [2/4] Compiling..."
     cmake --build --preset "${CMAKE_PRESET}"
 
-    echo " [3/3] Generating Debian Package (.deb)..."
+    echo " [3/4] Running Unit Tests..."
     cd build/
+    ctest --output-on-failure
+
+    echo " [4/4] Generating Debian Package (.deb)..."
     cpack -G DEB
 
     # Move to artifacts

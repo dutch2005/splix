@@ -21,9 +21,11 @@
 #ifndef _BAND_H_
 #define _BAND_H_
 
-#include <memory>
 #include <vector>
+#include <memory>
+#include <ranges>
 #include <cstdint>
+#include "sp_result.h"
 
 class Page;
 class BandPlane;
@@ -35,12 +37,12 @@ class BandPlane;
 class Band
 {
     protected:
-        uint32_t                                _bandNr;
-        const Page*                             _parent;
+        uint32_t                                _bandNr = 0;
+        const Page*                             _parent = nullptr;
         std::vector<std::unique_ptr<BandPlane>> _planes;
-        uint32_t                                _width;
-        uint32_t                                _height;
-        std::unique_ptr<Band>                   _sibling;
+        uint32_t                                _width = 0;
+        uint32_t                                _height = 0;
+        std::unique_ptr<Band>                   _sibling = nullptr;
 
     public:
         /**
@@ -116,6 +118,12 @@ class Band
         const BandPlane*        plane(size_t nr) const 
                                     {return nr < _planes.size() ? _planes[nr].get() : nullptr;}
         /**
+          * @return a view of the planes.
+          */
+        auto                    planes() const {
+             return _planes | std::views::transform([](const auto& p) { return p.get(); });
+        }
+        /**
           * @return the band width.
           */
         uint32_t                width() const {return _width;}
@@ -132,17 +140,15 @@ class Band
         /**
           * Swap this instance on the disk.
           * @param fd the file descriptor where the instance has to be swapped
-          * @return TRUE if the instance has been successfully swapped. 
-          *         Otherwise it returns FALSE.
+          * @return a Result indicating success or the specific error.
           */
-        bool                    swapToDisk(int fd);
+        SP::Result<>            swapToDisk(int fd);
         /**
           * Restore an instance from the disk into memory.
           * @param fd the file descriptor where the instance has been swapped
-          * @return a band instance if it has been successfully restored. 
-          *         Otherwise it returns NULL.
+          * @return a Result containing the band instance or an error.
           */
-        static std::unique_ptr<Band> restoreIntoMemory(int fd);
+        static SP::Result<std::unique_ptr<Band>> restoreIntoMemory(int fd);
 };
 
 #endif /* _BAND_H_ */

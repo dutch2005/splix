@@ -28,25 +28,10 @@
  * Constructeur - Destructeur
  * Init - Uninit 
  */
-Band::Band()
-{
-    _bandNr = 0;
-    _parent = nullptr;
-    _width = 0;
-    _height = 0;
-}
-
-Band::Band(uint32_t nr, uint32_t width, uint32_t height)
-{
-    _parent = nullptr;
-    _bandNr = nr;
-    _width = width;
-    _height = height;
-}
-
-Band::~Band()
-{
-}
+Band::Band() = default;
+Band::Band (uint32_t nr, uint32_t width, uint32_t height)
+    : _bandNr(nr), _width(width), _height(height) {}
+Band::~Band() = default;
 
 
 void Band::registerPlane(std::unique_ptr<BandPlane> plane)
@@ -61,40 +46,49 @@ void Band::registerPlane(std::unique_ptr<BandPlane> plane)
  * Mise sur disque / Rechargement
  * Swapping / restoring
  */
-bool Band::swapToDisk(int fd)
+/*
+ * Mise sur disque / Rechargement
+ * Swapping / restoring
+ */
+SP::Result<> Band::swapToDisk(int fd)
 {
     uint32_t colors = static_cast<uint32_t>(_planes.size());
-    if (write(fd, &_bandNr, sizeof(_bandNr)) == -1) return false;
-    if (write(fd, &colors, sizeof(colors)) == -1) return false;
-    if (write(fd, &_width, sizeof(_width)) == -1) return false;
-    if (write(fd, &_height, sizeof(_height)) == -1) return false;
+    if (write(fd, &_bandNr, sizeof(_bandNr)) == -1) return SP::Unexpected(SP::Error::IOError);
+    if (write(fd, &colors, sizeof(colors)) == -1) return SP::Unexpected(SP::Error::IOError);
+    if (write(fd, &_width, sizeof(_width)) == -1) return SP::Unexpected(SP::Error::IOError);
+    if (write(fd, &_height, sizeof(_height)) == -1) return SP::Unexpected(SP::Error::IOError);
     
     for (auto &plane : _planes) {
-        if (!plane->swapToDisk(fd))
-            return false;
+        auto res = plane->swapToDisk(fd);
+        if (!res) return res;
     }
-    return true;
+    return {};
 }
 
-std::unique_ptr<Band> Band::restoreIntoMemory(int fd)
+SP::Result<std::unique_ptr<Band>> Band::restoreIntoMemory(int fd)
 {
     uint32_t colors = 0;
     auto band = std::make_unique<Band>();
 
-    if (read(fd, &band->_bandNr, sizeof(band->_bandNr)) <= 0) return nullptr;
-    if (read(fd, &colors, sizeof(colors)) <= 0) return nullptr;
-    if (read(fd, &band->_width, sizeof(band->_width)) <= 0) return nullptr;
-    if (read(fd, &band->_height, sizeof(band->_height)) <= 0) return nullptr;
+    if (read(fd, &band->_bandNr, sizeof(band->_bandNr)) <= 0) return SP::Unexpected(SP::Error::IOError);
+    if (read(fd, &colors, sizeof(colors)) <= 0) return SP::Unexpected(SP::Error::IOError);
+    if (read(fd, &band->_width, sizeof(band->_width)) <= 0) return SP::Unexpected(SP::Error::IOError);
+    if (read(fd, &band->_height, sizeof(band->_height)) <= 0) return SP::Unexpected(SP::Error::IOError);
 
-    for (uint32_t i = 0; i < colors; i++) {
-        auto plane = BandPlane::restoreIntoMemory(fd);
-        if (!plane) {
-            return nullptr;
-        }
-        band->registerPlane(std::move(plane));
+    // Safety check: SpliX supports up to 4 colors (CMYK)
+    if (colors > 4) {
+        return SP::Unexpected(SP::Error::InconsistentData);
     }
 
-    return band;
+    for (uint32_t i = 0; i < colors; i++) {
+        auto res = BandPlane::restoreIntoMemory(fd);
+        if (!res) {
+            return SP::Unexpected(res.error());
+        }
+        band->registerPlane(std::move(res.value()));
+    }
+
+    return std::move(band);
 }
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */

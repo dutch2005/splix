@@ -22,8 +22,10 @@
 #define _BANDPLANE_H_
 
 #include <vector>
-#include <memory>
 #include <cstdint>
+#include <memory>
+#include <span>
+#include "sp_result.h"
 
 /**
   * @brief This class contains data related to a band plane.
@@ -42,21 +44,21 @@ class BandPlane
         };
 
     protected:
-        uint8_t                 _colorNr;
+        uint8_t                 _colorNr = 0;
         std::vector<uint8_t>    _data;
-        uint32_t                _checksum;
-        Endian                  _endian;
-        uint8_t                 _compression;
+        uint32_t                _checksum = 0;
+        Endian                  _endian = Endian::Dependant;
+        uint8_t                 _compression = 0;
 
     public:
         /**
           * Initialize the band plane instance.
           */
-        BandPlane();
+        BandPlane() = default;
         /**
           * Destroy the instance
           */
-        virtual ~BandPlane();
+        virtual ~BandPlane() = default;
 
     public:
         /**
@@ -94,6 +96,10 @@ class BandPlane
           */
         const uint8_t*          data() const {return _data.data();}
         /**
+          * @return a span viewing the buffer data.
+          */
+        std::span<const uint8_t> data_span() const noexcept { return _data; }
+        /**
           * @return the endian to use.
           */
         Endian                  endian() const {return _endian;}
@@ -110,22 +116,18 @@ class BandPlane
         /**
           * Swap this instance on the disk.
           * @param fd the file descriptor where the instance has to be swapped
-          * @return TRUE if the instance has been successfully swapped. 
-          *         Otherwise it returns FALSE.
+          * @return a Result indicating success or error.
           */
-        bool                    swapToDisk(int fd);
+        SP::Result<>            swapToDisk(int fd);
         /**
           * Restore an instance from the disk into memory.
           * @param fd the file descriptor where the instance has been swapped
-          * @return a bandplane instance if it has been successfully restored. 
-          *         Otherwise it returns NULL.
+          * @return a Result containing the bandplane instance or an error.
           */
-        static std::unique_ptr<BandPlane> restoreIntoMemory(int fd);
+        static SP::Result<std::unique_ptr<BandPlane>> restoreIntoMemory(int fd);
 };
 
 #endif /* _BANDPLANE_H_ */
-
-/* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 

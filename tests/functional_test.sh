@@ -22,15 +22,21 @@ fi
 echo "── Running Functional Raster-to-QPDL Test ──"
 
 # Setup dummy environment variables that CUPS would provide
-if [ -f "$PWD/ppd/ml1710.ppd" ]; then
+if [ -n "${TEST_PPD:-}" ] && [ -f "$TEST_PPD" ]; then
+    export PPD="$TEST_PPD"
+elif [ -f "$PWD/ppd/ml2160.ppd" ]; then
+    export PPD="$PWD/ppd/ml2160.ppd"
+elif [ -f "$PWD/ppd/ml1710.ppd" ]; then
     export PPD="$PWD/ppd/ml1710.ppd"
 elif [ -f "$(dirname "$0")/../ppd/ml1710.ppd" ]; then
     REL_PATH="$(dirname "$0")/../ppd/ml1710.ppd"
     export PPD="$(cd "$(dirname "$REL_PATH")" && pwd)/$(basename "$REL_PATH")"
 else
-    echo "❌ Error: ml1710.ppd not found."
+    echo "❌ Error: PPD not found."
     exit 1
 fi
+
+echo ">> Using PPD: $PPD"
 
 export CUPS_SERVERBIN="/usr/lib/cups"
 export CUPS_DATADIR="/usr/share/cups"
@@ -69,10 +75,11 @@ RASTER_FILE=$(mktemp)
 QPDL_FILE=$(mktemp)
 
 # Create 448 bytes of dummy header
-# Bytes 0-3: 'RaSt'
-printf "RaSt" > "$RASTER_FILE"
-# Fill the rest with zeros (minimal valid-ish header)
-dd if=/dev/zero bs=1 count=444 >> "$RASTER_FILE" 2>/dev/null
+dd if=/dev/zero bs=448 count=1 > "$RASTER_FILE" 2>/dev/null
+printf "RaSt" | dd of="$RASTER_FILE" bs=1 seek=0 conv=notrunc 2>/dev/null
+printf "\x00\x00\x00\x64" | dd of="$RASTER_FILE" bs=1 seek=272 conv=notrunc 2>/dev/null
+printf "\x00\x00\x00\x64" | dd of="$RASTER_FILE" bs=1 seek=276 conv=notrunc 2>/dev/null
+printf "\x00\x00\x00\x0d" | dd of="$RASTER_FILE" bs=1 seek=360 conv=notrunc 2>/dev/null
 
 # Append 100 lines of zero data (white space)
 # For 1-bit, 100 pixels = 13 bytes per line (rounded up)
@@ -81,7 +88,11 @@ dd if=/dev/zero bs=13 count=100 >> "$RASTER_FILE" 2>/dev/null
 echo ">> Feeding dummy raster to filter..."
 # Usage: job-id user title copies options [file]
 # We pass the raster on stdin.
-"$BIN_PATH" 1 "testuser" "test-document" 1 "" < "$RASTER_FILE" > "$QPDL_FILE" 2>test_stderr.log || true
+echo ">> Executing filter with 30s timeout..."
+timeout 30s "$BIN_PATH" 1 "testuser" "test-document" 1 "" < "$RASTER_FILE" > "$QPDL_FILE" || {
+    echo "❌ Error: Filter execution failed or timed out."
+    exit 1
+}
 
 # 2. Verify Output
 # QPDL (Samsung) usually starts with PJL: \x1b%-12345X@PJL

@@ -189,7 +189,6 @@ set(SPLIX_CORE_SOURCES
     src/algo0x11.cpp
     src/algo0x13.cpp
     src/algo0x15.cpp
-    src/algorithm.cpp
     src/band.cpp
     src/bandplane.cpp
     src/cache.cpp

@@ -4,7 +4,7 @@ set -euo pipefail
 echo " [1/4] Installing dependencies..."
 apt-get update -y > /dev/null
 apt-get install -y --fix-missing \
-    build-essential cmake \
+    build-essential cmake git xxd \
     cups libcups2-dev libcupsimage2-dev libjbig-dev \
     pkg-config ccache > /dev/null
 
@@ -27,7 +27,7 @@ fi
 
 echo " [2/4] Configuring CMake..."
 rm -rf /tmp/splix-build
-cmake --preset "${CMAKE_PRESET}"
+    cmake --preset "${CMAKE_PRESET}"
 
 echo " [3/4] Compiling..."
 cmake --build --preset "${CMAKE_PRESET}"

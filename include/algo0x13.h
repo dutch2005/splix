@@ -47,23 +47,23 @@ class Algo0x13 : public Algorithm
         };
 
     protected:
-        bool                                    _compressed;
+        bool                                    _compressed = false;
         std::deque<std::unique_ptr<BandPlane>>  _list;
 
     public:
-        Algo0x13();
-        virtual ~Algo0x13();
+        Algo0x13() = default;
+        virtual ~Algo0x13() = default;
 
     public:
         static void             _callback(unsigned char *data, size_t len, void *arg);
 
     public:
-        virtual std::unique_ptr<BandPlane> compress(const Request& request, 
-                                    std::span<const uint8_t> data, uint32_t width,
-                                    uint32_t height) override;
-        virtual bool            reverseLineColumn() override {return false;}
-        virtual bool            inverseByte() override {return false;}
-        virtual bool            splitIntoBands() override {return false;}
+        virtual SP::Result<std::unique_ptr<BandPlane>> compress(const Request& request, 
+                                     std::span<const uint8_t> data, uint32_t width,
+                                     uint32_t height) override;
+        virtual bool            reverseLineColumn() const override {return false;}
+        virtual bool            inverseByte() const override {return false;}
+        virtual bool            splitIntoBands() const override {return false;}
 };
 
 #endif /* DISABLE_JBIG */

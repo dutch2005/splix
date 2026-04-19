@@ -19,11 +19,13 @@
  * 
  */
 #include "printer.h"
-#include <time.h>
-#include <string.h>
+#include <ctime>
+#include <cstring>
+#include <cstdio>
 #include "errlog.h"
 #include "request.h"
 #include "ppdfile.h"
+#include "sp_portable.h"
 
 
 
@@ -31,17 +33,9 @@
  * Constructeur - Destructeur
  * Init - Uninit
  */
-Printer::Printer()
-    : _color(false), _qpdlVersion(0), _bandHeight(0), _specialBandWidth(false),
-      _packetSize(0), _paperType(0), _paperSource(0), _paperWidth(0.0f),
-      _paperHeight(0.0f), _unknownByte1(0), _unknownByte2(0), _unknownByte3(0),
-      _pageWidth(0.0f), _pageHeight(0.0f), _hardMarginX(0.0f), _hardMarginY(0.0f)
-{
-}
+Printer::Printer() = default;
 
-Printer::~Printer()
-{
-}
+Printer::~Printer() = default;
 
 
 
@@ -63,8 +57,8 @@ bool Printer::loadInformation(const Request& request)
     _specialBandWidth = request.ppd()->get("SpecialBandWidth", "QPDL");
     _packetSize = request.ppd()->get("PacketSize", "QPDL");
     _packetSize *= 1024;
-    _manufacturer = static_cast<const char*>(request.ppd()->get("Manufacturer"));
-    _model = static_cast<const char*>(request.ppd()->get("ModelName"));
+    _manufacturer = std::string(request.ppd()->get("Manufacturer"));
+    _model = std::string(request.ppd()->get("ModelName"));
     _color = request.ppd()->get("ColorDevice");
     _qpdlVersion = request.ppd()->get("QPDLVersion", "QPDL");
     if (!_qpdlVersion || (_qpdlVersion > 3 && _qpdlVersion != 5)) {
@@ -73,13 +67,14 @@ bool Printer::loadInformation(const Request& request)
     }
     value = request.ppd()->get("DocHeaderValues", "General");
     value.setPreformatted();
-    if (value.isNull()) {
+    if (value.isNull() || value.deepCopy().length() < 3) {
         ERRORMSG(_("Unknown header values. Operation aborted."));
         return false;
     }
-    _unknownByte1 = (static_cast<const char*>(value))[0];
-    _unknownByte2 = (static_cast<const char*>(value))[1];
-    _unknownByte3 = (static_cast<const char*>(value))[2];
+    std::string headerVals = value.deepCopy();
+    _unknownByte1 = headerVals[0];
+    _unknownByte2 = headerVals[1];
+    _unknownByte3 = headerVals[2];
 
     // Get PJL information
     value = request.ppd()->get("BeginPJL", "PJL");
@@ -88,14 +83,14 @@ bool Printer::loadInformation(const Request& request)
         ERRORMSG(_("No PJL header found. Operation aborted."));
         return false;
     }
-    _beginPJL = static_cast<const char*>(value);
+    _beginPJL = value.deepCopy();
     value = request.ppd()->get("EndPJL", "PJL");
     value.setPreformatted();
     if (value.isNull()) {
         ERRORMSG(_("No PJL footer found. Operation aborted."));
         return false;
     }
-    _endPJL = static_cast<const char*>(value);
+    _endPJL = value.deepCopy();
 
     // Get the paper information
     paperType = request.ppd()->get("MediaSize");
@@ -105,34 +100,34 @@ bool Printer::loadInformation(const Request& request)
         ERRORMSG(_("Cannot get paper size information. Operation aborted."));
         return false;
     }
-    if (!(strcasecmp(paperType, "Letter"))) _paperType = 0;
-    else if (!(strcasecmp(paperType, "Legal"))) _paperType = 1;
-    else if (!(strcasecmp(paperType, "A4"))) _paperType = 2;
-    else if (!(strcasecmp(paperType, "Executive"))) _paperType = 3;
-    else if (!(strcasecmp(paperType, "Ledger"))) _paperType = 4;
-    else if (!(strcasecmp(paperType, "A3"))) _paperType = 5;
-    else if (!(strcasecmp(paperType, "Env10"))) _paperType = 6;
-    else if (!(strcasecmp(paperType, "Monarch"))) _paperType = 7;
-    else if (!(strcasecmp(paperType, "C5"))) _paperType = 8;
-    else if (!(strcasecmp(paperType, "DL"))) _paperType = 9;
-    else if (!(strcasecmp(paperType, "B4"))) _paperType = 10;
-    else if (!(strcasecmp(paperType, "B5"))) _paperType = 11;
-    else if (!(strcasecmp(paperType, "EnvISOB5"))) _paperType = 12;
-    else if (!(strcasecmp(paperType, "Postcard"))) _paperType = 14;
-    else if (!(strcasecmp(paperType, "DoublePostcardRotated"))) _paperType = 15;
-    else if (!(strcasecmp(paperType, "A5"))) _paperType = 16;
-    else if (!(strcasecmp(paperType, "A6"))) _paperType = 17;
-    else if (!(strcasecmp(paperType, "B6"))) _paperType = 18;
-    else if (!(strcasecmp(paperType, "Custom"))) _paperType = 21;
-    else if (!(strcasecmp(paperType, "C6"))) _paperType = 23;
-    else if (!(strcasecmp(paperType, "Folio"))) _paperType = 24;
-    else if (!(strcasecmp(paperType, "EnvPersonal"))) _paperType = 25;
-    else if (!(strcasecmp(paperType, "Env9"))) _paperType = 26;
-    else if (!(strcasecmp(paperType, "3x5"))) _paperType = 27;
-    else if (!(strcasecmp(paperType, "Oficio"))) _paperType = 28;
-    else if (!(strcasecmp(paperType, "Statement"))) _paperType = 30;
-    else if (!(strcasecmp(paperType, "roc8k"))) _paperType = 34;
-    else if (!(strcasecmp(paperType, "roc16k"))) _paperType = 35;
+    if (!(SP_STRCASECMP(paperType, "Letter"))) _paperType = 0;
+    else if (!(SP_STRCASECMP(paperType, "Legal"))) _paperType = 1;
+    else if (!(SP_STRCASECMP(paperType, "A4"))) _paperType = 2;
+    else if (!(SP_STRCASECMP(paperType, "Executive"))) _paperType = 3;
+    else if (!(SP_STRCASECMP(paperType, "Ledger"))) _paperType = 4;
+    else if (!(SP_STRCASECMP(paperType, "A3"))) _paperType = 5;
+    else if (!(SP_STRCASECMP(paperType, "Env10"))) _paperType = 6;
+    else if (!(SP_STRCASECMP(paperType, "Monarch"))) _paperType = 7;
+    else if (!(SP_STRCASECMP(paperType, "C5"))) _paperType = 8;
+    else if (!(SP_STRCASECMP(paperType, "DL"))) _paperType = 9;
+    else if (!(SP_STRCASECMP(paperType, "B4"))) _paperType = 10;
+    else if (!(SP_STRCASECMP(paperType, "B5"))) _paperType = 11;
+    else if (!(SP_STRCASECMP(paperType, "EnvISOB5"))) _paperType = 12;
+    else if (!(SP_STRCASECMP(paperType, "Postcard"))) _paperType = 14;
+    else if (!(SP_STRCASECMP(paperType, "DoublePostcardRotated"))) _paperType = 15;
+    else if (!(SP_STRCASECMP(paperType, "A5"))) _paperType = 16;
+    else if (!(SP_STRCASECMP(paperType, "A6"))) _paperType = 17;
+    else if (!(SP_STRCASECMP(paperType, "B6"))) _paperType = 18;
+    else if (!(SP_STRCASECMP(paperType, "Custom"))) _paperType = 21;
+    else if (!(SP_STRCASECMP(paperType, "C6"))) _paperType = 23;
+    else if (!(SP_STRCASECMP(paperType, "Folio"))) _paperType = 24;
+    else if (!(SP_STRCASECMP(paperType, "EnvPersonal"))) _paperType = 25;
+    else if (!(SP_STRCASECMP(paperType, "Env9"))) _paperType = 26;
+    else if (!(SP_STRCASECMP(paperType, "3x5"))) _paperType = 27;
+    else if (!(SP_STRCASECMP(paperType, "Oficio"))) _paperType = 28;
+    else if (!(SP_STRCASECMP(paperType, "Statement"))) _paperType = 30;
+    else if (!(SP_STRCASECMP(paperType, "roc8k"))) _paperType = 34;
+    else if (!(SP_STRCASECMP(paperType, "roc16k"))) _paperType = 35;
     else {
         ERRORMSG(_("Invalid paper size \"%s\". Operation aborted."), paperType);
         return false;
@@ -157,13 +152,13 @@ bool Printer::loadInformation(const Request& request)
             ERRORMSG(_("Cannot get input slot information."));
         }
     }
-    if (!(strcasecmp(paperSource, "Auto"))) _paperSource = 1;
-    else if (!(strcasecmp(paperSource, "Manual"))) _paperSource = 2;
-    else if (!(strcasecmp(paperSource, "Multi"))) _paperSource = 3;
-    else if (!(strcasecmp(paperSource, "Upper"))) _paperSource = 4;
-    else if (!(strcasecmp(paperSource, "Lower"))) _paperSource = 5;
-    else if (!(strcasecmp(paperSource, "Envelope"))) _paperSource = 6;
-    else if (!(strcasecmp(paperSource, "Tray3"))) _paperSource = 7;
+    if (!(SP_STRCASECMP(paperSource, "Auto"))) _paperSource = 1;
+    else if (!(SP_STRCASECMP(paperSource, "Manual"))) _paperSource = 2;
+    else if (!(SP_STRCASECMP(paperSource, "Multi"))) _paperSource = 3;
+    else if (!(SP_STRCASECMP(paperSource, "Upper"))) _paperSource = 4;
+    else if (!(SP_STRCASECMP(paperSource, "Lower"))) _paperSource = 5;
+    else if (!(SP_STRCASECMP(paperSource, "Envelope"))) _paperSource = 6;
+    else if (!(SP_STRCASECMP(paperSource, "Tray3"))) _paperSource = 7;
     else {
         ERRORMSG(_("Invalid paper source \"%s\". Operation aborted."), 
             paperSource);
@@ -182,11 +177,12 @@ bool Printer::sendPJLHeader(const Request& request,
                          unsigned long    yResolution ) const
 {
     const char *reverse;
+    struct tm timeinfo_buf;
     struct tm *timeinfo;
     time_t timestamp;
 
     time(&timestamp);
-    timeinfo = localtime(&timestamp);
+    timeinfo = SP::portable_localtime(&timestamp, &timeinfo_buf);
 
     printf("%s", _beginPJL.c_str());
 
@@ -220,7 +216,7 @@ bool Printer::sendPJLHeader(const Request& request,
     else
         printf("@PJL SET JAMRECOVERY=OFF\n");
     if (request.printer()->color()) {
-        if (!strcasecmp(request.ppd()->get("ColorModel"), "CMYK"))
+        if (!SP_STRCASECMP(request.ppd()->get("ColorModel"), "CMYK"))
             printf("@PJL SET COLORMODE=COLOR\n");
         else
             printf("@PJL SET COLORMODE=MONO\n");

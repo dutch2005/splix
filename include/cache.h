@@ -24,6 +24,7 @@
 #include <memory>
 #include <string>
 #include <cstdint>
+#include "sp_result.h"
 
 class Page;
 
@@ -55,10 +56,10 @@ extern bool uninitializeCache();
 
 /**
   * Extract the next page (depending on the curernt cache policy)
-  * @return the instance of the page. Otherwise it returns empty unique_ptr if 
-  *         no page are found.
+  * @return a Result containing the instance of the page. On EOF, the Result
+  *         contains a null unique_ptr.
   */
-extern std::unique_ptr<Page> getNextPage();
+extern SP::Result<std::unique_ptr<Page>> getNextPage();
 
 /**
   * Register a new page in the cache.
@@ -85,10 +86,11 @@ extern void setNumberOfPages(uint32_t nr);
   */
 class CacheEntry {
     protected:
-        std::unique_ptr<Page>   _page;
-        CacheEntry*             _previous;
-        CacheEntry*             _next;
-        std::string             _tempFile;
+        std::unique_ptr<Page>   _page = nullptr;
+        CacheEntry*             _previous = nullptr;
+        CacheEntry*             _next = nullptr;
+        std::string             _tempFile = "";
+        SP::Error               _error = SP::Error::None;
 
     public:
         /**
@@ -115,16 +117,14 @@ class CacheEntry {
                                     {_previous = entry;}
         /**
           * Swap the page instance on the disk.
-          * @return TRUE if the page has been successfully swapped. Otherwise it
-          *         returns FALSE.
+          * @return a Result indicating success or error.
           */
-        bool                    swapToDisk();
+        SP::Result<>            swapToDisk();
         /**
           * Restore a previously swapped page into memory.
-          * @return TRUE if the page has been successfully restored. Otherwise 
-          *         it returns FALSE.
+          * @return a Result indicating success or error.
           */
-        bool                    restoreIntoMemory();
+        SP::Result<>            restoreIntoMemory();
 
         /**
           * @return the page instance pointer.
@@ -148,8 +148,15 @@ class CacheEntry {
           */
         bool                    isSwapped() const 
                                     {return !_tempFile.empty();}
+        /**
+          * @return the error associated with this entry, if any.
+          */
+        SP::Error               error() const {return _error;}
+        /**
+          * Set the error associated with this entry.
+          */
+        void                    setError(SP::Error err) {_error = err;}
 };
 #endif /* _CACHE_H_ */
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
-

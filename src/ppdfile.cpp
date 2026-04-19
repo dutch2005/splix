@@ -20,42 +20,33 @@
  */
 #include "ppdfile.h"
 #include <cups/ppd.h>
-#include "errlog.h"
-
-
-
-/*
- * Constructeur - Destructeur
- * Init - Uninit
- */
 #include <cups/cups.h>
-#include <string.h>
+#include <cstring>
 #include <ctype.h>
-#include <stdio.h>
+#include <cstdio>
+#include <algorithm>
 #include "errlog.h"
+#include "sp_portable.h"
 
 /*
  * Constructeur - Destructeur
  * Init - Uninit
  */
-PPDFile::PPDFile() : _dest(nullptr), _dinfo(nullptr), _ppd(nullptr), 
+PPDFile::PPDFile() : 
     _num_options(0), _options(nullptr)
 {
 }
 
-PPDFile::~PPDFile()
-{
-    close();
-}
+PPDFile::~PPDFile() = default;
 
 /*
  * Ouverture et fermeture du fichier PPD
  * Opening or closing PPD file
  */
-bool PPDFile::open(const char *file, const char *version, const char *useropts)
+SP::Result<> PPDFile::open(std::string_view file, std::string_view version, std::string_view useropts)
 {
     const char *printerName;
-    const char *fileVersion;
+    PPDValue fileVersion;
 
     // Check if printer information was previously opened
     if (_dest || _dinfo) {
@@ -64,68 +55,58 @@ bool PPDFile::open(const char *file, const char *version, const char *useropts)
         close();
     }
 
-    if (file) _ppdPath = file;
+    if (!file.empty()) _ppdPath = file;
 
     // Get the printer name from the environment
     printerName = getenv("PRINTER");
     if (!printerName)
         printerName = getenv("CUPS_DEST");
 
-    _dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, printerName, NULL);
+    _dest.reset(cupsGetNamedDest(CUPS_HTTP_DEFAULT, printerName, NULL));
     if (!_dest) {
         // Fallback: try to find any destination if PRINTER is not set
-        _dest = cupsGetNamedDest(CUPS_HTTP_DEFAULT, NULL, NULL);
+        _dest.reset(cupsGetNamedDest(CUPS_HTTP_DEFAULT, NULL, NULL));
     }
 
     if (!_dest) {
         WARNMSG(_("Cannot find printer destination (PRINTER=%s). Proceeding with defaults."), 
             printerName ? printerName : "NULL");
     } else {
-        _dinfo = cupsCopyDestInfo(CUPS_HTTP_DEFAULT, _dest);
+        _dinfo.reset(cupsCopyDestInfo(CUPS_HTTP_DEFAULT, _dest.get()));
         if (!_dinfo) {
             WARNMSG(_("Cannot get destination info for printer %s. Proceeding with defaults."), _dest->name);
         }
     }
 
     // Direct PPD file loading fallback
-    if (file) {
-        _ppd = ppdOpenFile(file);
+    if (!file.empty()) {
+        _ppd.reset(ppdOpenFile(file.data()));
         if (!_ppd) {
-            ERRORMSG(_("Cannot open PPD file %s: %s"), file, cupsLastErrorString());
+            ERRORMSG(_("Cannot open PPD file %s: %s"), file.data(), cupsLastErrorString());
+            return SP::Unexpected(SP::Error::PPDOpenError);
         } else {
-            ppdMarkDefaults(_ppd);
+            ppdMarkDefaults(_ppd.get());
         }
     }
 
     // Parse user options
-    _num_options = cupsParseOptions(useropts, 0, &_options);
+    _num_options = cupsParseOptions(useropts.data(), 0, &_options);
 
-    // Check version (we still use the file for this if available, or skip)
-    // NOTE: In a pure IPP world, version checking against a local PPD
-    // might be obsolete, but we keep the logic if possible.
+    // Check version
     fileVersion = get("FileVersion");
-    if (fileVersion && strcmp(fileVersion, version)) {
-        ERRORMSG(_("Invalid PPD version: %s (Expected: %s)"), fileVersion, version);
-        // We continue anyway as IPP info might be compatible
+    if (!fileVersion.isNull() && fileVersion != version) {
+        ERRORMSG(_("Invalid PPD version: %s (Expected: %s)"), (const char*)fileVersion, version.data());
+        return SP::Unexpected(SP::Error::PPDVersionMismatch);
     }
 
-    return true;
+    return {};
 }
 
 void PPDFile::close()
 {
-    if (_dinfo) {
-        cupsFreeDestInfo(_dinfo);
-        _dinfo = nullptr;
-    }
-    if (_dest) {
-        cupsFreeDests(1, _dest);
-        _dest = nullptr;
-    }
-    if (_ppd) {
-        ppdClose(_ppd);
-        _ppd = nullptr;
-    }
+    _dinfo.reset();
+    _dest.reset();
+    _ppd.reset();
     if (_options) {
         cupsFreeOptions(_num_options, _options);
         _options = nullptr;
@@ -137,29 +118,29 @@ void PPDFile::close()
  * Obtention d'une donnée
  * Get a value
  */
-PPDValue PPDFile::get(const char *name, const char *opt)
+PPDValue PPDFile::get(std::string_view name, std::string_view opt)
 {
     const char *valStr = nullptr;
     PPDValue val;
 
     // 1. Search in job-specific options first
-    valStr = cupsGetOption(name, _num_options, _options);
+    valStr = cupsGetOption(name.data(), _num_options, _options);
 
     // 2. Search in destination info (defaults/attributes)
     if (!valStr && _dinfo) {
-        if (opt) {
+        if (!opt.empty()) {
             // It might be a choice for a specific option
             ipp_attribute_t *attr = cupsFindDestSupported(CUPS_HTTP_DEFAULT, 
-                                        _dest, _dinfo, name);
+                                        _dest.get(), _dinfo.get(), name.data());
             if (attr) {
                 // Return default value if present
-                valStr = cupsGetOption(name, _dest->num_options, _dest->options);
+                valStr = cupsGetOption(name.data(), _dest->num_options, _dest->options);
             }
         } else {
             // Check for general IPP attributes
-            valStr = cupsGetOption(name, _dest->num_options, _dest->options);
+            valStr = cupsGetOption(name.data(), _dest->num_options, _dest->options);
             if (!valStr) {
-                std::string cupsName = std::string("cups-") + name;
+                std::string cupsName = std::string("cups-") + std::string(name);
                 valStr = cupsGetOption(cupsName.c_str(), _dest->num_options, 
                             _dest->options);
             }
@@ -168,40 +149,36 @@ PPDValue PPDFile::get(const char *name, const char *opt)
 
     // 3. Fallback to direct PPD file loading
     if (!valStr && _ppd) {
-        ppd_choice_t *choice = ppdFindMarkedChoice(_ppd, name);
+        ppd_choice_t *choice = ppdFindMarkedChoice(_ppd.get(), name.data());
         if (choice) {
             valStr = choice->choice;
         } else {
-            ppd_option_t *option = ppdFindOption(_ppd, name);
+            ppd_option_t *option = ppdFindOption(_ppd.get(), name.data());
             if (option) {
                 valStr = option->defchoice;
             } else {
                 // Finally, look for attributes (e.g. *QPDL BandSize)
-                // In PPDs like ml1710, these are stored as *QPDL BandSize: "128"
-                // So "name" from the caller (BandSize) is technically the spec,
-                // and "opt" (QPDL) is the attribute name.
                 ppd_attr_t *attr = nullptr;
-                if (opt) {
-                    attr = ppdFindAttr(_ppd, opt, name);
+                if (!opt.empty()) {
+                    attr = ppdFindAttr(_ppd.get(), opt.data(), name.data());
                 } else {
-                    attr = ppdFindAttr(_ppd, name, nullptr);
+                    attr = ppdFindAttr(_ppd.get(), name.data(), nullptr);
                 }
 
                 if (attr && attr->value) {
                     valStr = attr->value;
                     // Attributes in PPD often have quotes, e.g., "128"
                     if (valStr[0] == '"') {
-                        size_t len = strlen(valStr);
-                        if (len >= 2 && valStr[len-1] == '"') {
-                            std::string unquoted(valStr + 1, len - 2);
-                            val.set(unquoted.c_str());
-                            val.setPreformatted(); // Copies into _preformatted
+                        std::string_view sv(valStr);
+                        if (sv.size() >= 2 && sv.back() == '"') {
+                            val.set(sv.substr(1, sv.size() - 2));
+                            val.setPreformatted(); 
                             return val;
                         }
                     }
-                } else if (opt && name) {
+                } else if (!opt.empty() && !name.empty()) {
                     // Fallback: try reversed just in case libcups/PPD is weird
-                    attr = ppdFindAttr(_ppd, name, opt);
+                    attr = ppdFindAttr(_ppd.get(), name.data(), opt.data());
                     if (attr && attr->value) {
                         valStr = attr->value;
                     }
@@ -217,12 +194,12 @@ PPDValue PPDFile::get(const char *name, const char *opt)
     return val;
 }
 
-PPDValue PPDFile::getPageSize(const char *name)
+PPDValue PPDFile::getPageSize(std::string_view name)
 {
     PPDValue val;
     cups_size_t size;
 
-    if (_dinfo && cupsGetDestMediaByName(CUPS_HTTP_DEFAULT, _dest, _dinfo, name, 
+    if (_dinfo && cupsGetDestMediaByName(CUPS_HTTP_DEFAULT, _dest.get(), _dinfo.get(), name.data(), 
             CUPS_MEDIA_FLAGS_DEFAULT, &size)) {
         // CUPS size is in 100ths of a millimeter. Convert to points (1/72 inch).
         float w = (static_cast<float>(size.width) / 2540.0f) * 72.0f;
@@ -232,7 +209,7 @@ PPDValue PPDFile::getPageSize(const char *name)
         val.set(w, h, lm, bm);
     } else if (_ppd) {
         // Fallback to direct PPD page size resolution
-        ppd_size_t *psize = ppdPageSize(_ppd, name);
+        ppd_size_t *psize = ppdPageSize(_ppd.get(), name.data());
         if (psize) {
             val.set(psize->width, psize->length, psize->left, psize->bottom);
         }
@@ -247,35 +224,25 @@ PPDValue PPDFile::getPageSize(const char *name)
  * Gestion des valeurs du PPD
  * PPD values management
  */
-PPDFile::Value::Value()
-{
-    _value = NULL;
-    _out = NULL;
-    _width = 0.;
-    _height = 0.;
-    _marginX = 0.;
-    _marginY = 0.;
-}
-
-PPDFile::Value::Value(const char *value)
-{
-    _value = value;
-    _out = value;
-    _width = 0.;
-    _height = 0.;
-    _marginX = 0.;
-    _marginY = 0.;
-}
-
-PPDFile::Value::~Value()
+PPDFile::Value::Value() : 
+    _width(0.0f), _height(0.0f), _marginX(0.0f), _marginY(0.0f)
 {
 }
 
-PPDFile::Value& PPDFile::Value::set(const char *value)
+PPDFile::Value::Value(std::string_view value) : 
+    _raw(value), _out(_raw), _hasValue(true), 
+    _width(0.0f), _height(0.0f), _marginX(0.0f), _marginY(0.0f)
+{
+}
+
+PPDFile::Value::~Value() = default;
+
+PPDFile::Value& PPDFile::Value::set(std::string_view value)
 {
     _preformatted.clear();
-    _value = value;
-    _out = _value;
+    _raw = value;
+    _out = _raw;
+    _hasValue = true;
 
     return *this;
 }
@@ -293,13 +260,13 @@ PPDFile::Value& PPDFile::Value::set(float width, float height, float marginX,
 
 PPDFile::Value& PPDFile::Value::setPreformatted()
 {
-    const char *str = _value;
-
-    if (!str)
+    if (_raw.empty())
         return *this;
 
+    const char *str = _raw.c_str();
+
     _preformatted.clear();
-    _preformatted.reserve(strlen(str));
+    _preformatted.reserve(_raw.size());
 
     while (*str) {
         if (*str == '<' && strlen(str) >= 3 && isxdigit(*(str+1))) {
@@ -325,41 +292,101 @@ PPDFile::Value& PPDFile::Value::setPreformatted()
         _preformatted += *str;
         str++;
     }
-    _out = _preformatted.c_str();
+    _out = _preformatted;
 
     return *this;
 }
 
 std::string PPDFile::Value::deepCopy() const
 {
-    if (!_out)
+    if (_out.empty())
         return "";
     return std::string(_out);
 }
 
 bool PPDFile::Value::isTrue() const
 {
-    if (!_out)
+    if (_out.empty())
         return false;
-    if (!strcmp(_out, "1") || !strcasecmp(_out, "true") || 
-        !strcasecmp(_out, "enable") || !strcasecmp(_out, "enabled") || 
-        !strcasecmp(_out, "yes") || !strcasecmp(_out, "on"))
+    if (_out == "1" || !SP_STRCASECMP(_out.c_str(), "true") || 
+        !SP_STRCASECMP(_out.c_str(), "enable") || !SP_STRCASECMP(_out.c_str(), "enabled") || 
+        !SP_STRCASECMP(_out.c_str(), "yes") || !SP_STRCASECMP(_out.c_str(), "on"))
         return true;
     return false;
 }
 
-bool PPDFile::Value::operator == (const char* val) const
-{
-    if (!_out)
-        return false;
-    return !strcasecmp(_out, val);
+PPDFile::Value::operator unsigned long() const {
+    unsigned long val = 0;
+    if (!_out.empty()) {
+        std::from_chars(_out.data(), _out.data() + _out.size(), val);
+    }
+    return val;
 }
 
-bool PPDFile::Value::operator != (const char* val) const
+PPDFile::Value::operator long() const {
+    long val = 0;
+    if (!_out.empty()) {
+        std::from_chars(_out.data(), _out.data() + _out.size(), val);
+    }
+    return val;
+}
+
+PPDFile::Value::operator float() const {
+    float val = 0.0f;
+    if (!_out.empty()) {
+        try {
+            val = std::stof(_out);
+        } catch (...) {}
+    }
+    return val;
+}
+
+PPDFile::Value::operator double() const {
+    double val = 0.0;
+    if (!_out.empty()) {
+        try {
+            val = std::stod(_out);
+        } catch (...) {}
+    }
+    return val;
+}
+
+PPDFile::Value::operator long double() const {
+    long double val = 0.0;
+    if (!_out.empty()) {
+        try {
+            val = std::stold(_out);
+        } catch (...) {}
+    }
+    return val;
+}
+
+bool PPDFile::Value::operator == (std::string_view val) const
 {
-    if (!_out)
+    if (_out.empty())
+        return false;
+    return !SP_STRCASECMP(_out.c_str(), val.data());
+}
+
+bool PPDFile::Value::operator == (const char *val) const
+{
+    if (_out.empty() || !val)
+        return false;
+    return !SP_STRCASECMP(_out.c_str(), val);
+}
+
+bool PPDFile::Value::operator != (std::string_view val) const
+{
+    if (_out.empty())
         return true;
-    return strcasecmp(_out, val);
+    return SP_STRCASECMP(_out.c_str(), val.data()) != 0;
+}
+
+bool PPDFile::Value::operator != (const char *val) const
+{
+    if (_out.empty() || !val)
+        return true;
+    return SP_STRCASECMP(_out.c_str(), val) != 0;
 }
 
 
@@ -369,26 +396,24 @@ bool PPDFile::Value::operator != (const char* val) const
  */
 PPDFile::Value::Value(const PPDFile::Value &val)
 {
-    _value = val._value;
+    _raw = val._raw;
     _preformatted = val._preformatted;
-    _out = _preformatted.empty() ? _value : _preformatted.c_str();
+    _out = val._preformatted.empty() ? _raw : _preformatted;
+    _hasValue = val._hasValue;
     _width = val._width;
     _height = val._height;
     _marginX = val._marginX;
     _marginY = val._marginY;
 }
 
-/*
- * Opérateur d'assignation
- * Assignment operator
- */
 PPDFile::Value& PPDFile::Value::operator = (const PPDFile::Value &val)
 {
     if (this == &val)
         return *this;
-    _value = val._value;
+    _raw = val._raw;
     _preformatted = val._preformatted;
-    _out = _preformatted.empty() ? _value : _preformatted.c_str();
+    _out = val._preformatted.empty() ? _raw : _preformatted;
+    _hasValue = val._hasValue;
     _width = val._width;
     _height = val._height;
     _marginX = val._marginX;

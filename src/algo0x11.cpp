@@ -26,6 +26,7 @@
 #include <memory>
 #include <cstdint>
 #include <algorithm>
+#include <ranges>
 #include "bandplane.h"
 #include "errlog.h"
 
@@ -35,92 +36,109 @@
  * Fonctions locales
  * Local functions
  */
-int Algo0x11::__compare(const void *n1, const void *n2)
+// Removed legacy __compare function
+
+SP::Result<> Algo0x11::_lookupBestOccurs(std::span<const uint8_t> data)
 {
-    // n2 and n1 has been exchanged since the first
-    // element of the array MUST be the biggest
-    return static_cast<int>(*static_cast<const uint32_t *>(n2)) - 
-           static_cast<int>(*static_cast<const uint32_t *>(n1));
+    struct Occurence {
+        uint32_t count;
+        uint32_t offset;
+    };
+    
+    // Safety check: Don't process if data is too small for sampling
+    if (data.size() < Algo0x11::COMPRESS_SAMPLE_RATE) {
+        return {}; // Not an error, just can't optimize
+    }
+
+    try {
+        std::vector<Occurence> occurs(Algo0x11::COMPRESS_SAMPLE_RATE);
+        bool oneIsPresent = false;
+        uint32_t size = static_cast<uint32_t>(data.size());
+
+        // Initialize the table
+        for (uint32_t i=0; i < Algo0x11::COMPRESS_SAMPLE_RATE; i++) {
+            occurs[i] = {0, i};
+        }
+
+        // Calculate the byte occurrence
+        for (uint32_t i=Algo0x11::COMPRESS_SAMPLE_RATE; i < size; i += Algo0x11::COMPRESS_SAMPLE_RATE) {
+            uint8_t b = data[i];
+            for (uint32_t j=1; j < Algo0x11::COMPRESS_SAMPLE_RATE; j++) {
+                if (data[i - j] == b) {
+                    occurs[j - 1].count++;
+                }
+            }
+        }
+
+        // Order the array (biggest first)
+        std::ranges::sort(occurs, [](const Occurence& a, const Occurence& b) {
+            return a.count > b.count;
+        });
+
+        // Set the pointer table to use for compression
+        for (uint32_t i=0; i < Algo0x11::TABLE_PTR_SIZE; i++) {
+            _ptrArray[i] = occurs[i].offset + 1;
+            if (_ptrArray[i] == 1) {
+                oneIsPresent = true;
+            }
+        }
+        // Append the value 1 which improves the compression of multiple same bytes
+        if (!oneIsPresent) {
+            _ptrArray[Algo0x11::TABLE_PTR_SIZE-1] = 1;
+        }
+    } catch (const std::bad_alloc&) {
+        return SP::Unexpected(SP::Error::MemoryError);
+    }
+
+    return {};
 }
 
-bool Algo0x11::_lookupBestOccurs(std::span<const uint8_t> data)
+SP::Result<> Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint8_t> &output)
 {
-    uint32_t occurs[COMPRESS_SAMPLE_RATE][2];
-    bool oneIsPresent = false;
-    uint8_t b;
-    uint32_t i;
-    uint32_t size = static_cast<uint32_t>(data.size());
-
-    // Initialize the table
-    // occurs[i][0] = number of occurences of the offset
-    // occurs[i][1] = offset
-    for (i=0; i < COMPRESS_SAMPLE_RATE; i++) {
-        occurs[i][0] = 0;
-        occurs[i][1] = i;
-    }
-
-    // Calculate the byte occurrence
-    for (i=COMPRESS_SAMPLE_RATE; i < size; i += COMPRESS_SAMPLE_RATE) {
-        b = data[i];
-        for (uint32_t j=1; j < COMPRESS_SAMPLE_RATE; j++)
-            if (data[i - j] == b)
-                occurs[(j - 1)][0]++;
-    }
-
-    // Order the array
-    qsort(occurs, COMPRESS_SAMPLE_RATE, sizeof(uint32_t)*2, __compare);
-
-    // Set the pointer table to use for compression
-    for (i=0; i < TABLE_PTR_SIZE; i++) {
-        _ptrArray[i] = occurs[i][1] + 1;
-        if (_ptrArray[i] == 1)
-            oneIsPresent = true;
-    }
-    // Append the value 1 which improves the compression of multiple same bytes
-    if (!oneIsPresent)
-        _ptrArray[TABLE_PTR_SIZE-1] = 1;
-
-    return true;
-}
-
-bool Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint8_t> &output)
-{
-    uint32_t r, uncompSize=0, maxCompSize, bestCompCounter, bestPtr;
-    [[maybe_unused]] uint32_t w=4;
+    uint32_t r=0, uncompSize=0, maxCompSize, bestCompCounter, bestPtr;
     uint32_t rawDataCounter = 0, rawDataCounterPtr=0;
     uint32_t size = static_cast<uint32_t>(data.size());
 
     // Create the output buffer with estimated size
     output.clear();
-    output.resize(4 + TABLE_PTR_SIZE * 2); 
+    try {
+        output.reserve(size + (Algo0x11::TABLE_PTR_SIZE * 2) + 4);
+        output.resize(4); // placeholder for uncompSize
+    } catch (const std::bad_alloc&) {
+        return SP::Unexpected(SP::Error::MemoryError);
+    }
 
     // Print the table
-    for (uint32_t i=0; i < TABLE_PTR_SIZE; i++) {
+    for (uint32_t i=0; i < Algo0x11::TABLE_PTR_SIZE; i++) {
         uint16_t ptrVal = static_cast<uint16_t>(_ptrArray[i]);
         output.push_back(static_cast<uint8_t>(ptrVal & 0xFF));
         output.push_back(static_cast<uint8_t>((ptrVal >> 8) & 0xFF));
         if (_ptrArray[i] > uncompSize)
             uncompSize = _ptrArray[i];
     }
-    // Update w manually to match logic or just use output.size()
-    w = static_cast<uint32_t>(output.size());
 
     // Print the first uncompressed bytes
-    if (uncompSize > MAX_UNCOMPRESSED_BYTES)
-        uncompSize = MAX_UNCOMPRESSED_BYTES;
+    if (uncompSize > Algo0x11::MAX_UNCOMPRESSED_BYTES)
+        uncompSize = Algo0x11::MAX_UNCOMPRESSED_BYTES;
     
-    std::memcpy(output.data(), &uncompSize, 4);
+    // Safety check: ensure r doesn't exceed data size
+    if (uncompSize > size)
+        uncompSize = size;
+
+    // Correctly write uncompSize to the first 4 bytes
+    for (int i=0; i<4; ++i) {
+        output[i] = (uncompSize >> (i*8)) & 0xFF;
+    }
     
     for (r=0; r < uncompSize; r++) {
         output.push_back(data[r]);
     }
-    w = static_cast<uint32_t>(output.size());
 
     //
     // Compress the data
     //
     do {
-        maxCompSize = size - r > MAX_COMPRESSED_BYTES ? MAX_COMPRESSED_BYTES :
+        maxCompSize = size - r > Algo0x11::MAX_COMPRESSED_BYTES ? Algo0x11::MAX_COMPRESSED_BYTES :
             size - r;
 
         // End of the compression
@@ -135,7 +153,7 @@ bool Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint8_t> &ou
             bestPtr = 0;
 
             // Check the best similar piece of data
-            for (uint32_t i=0; i < TABLE_PTR_SIZE; i++) {
+            for (uint32_t i=0; i < Algo0x11::TABLE_PTR_SIZE; i++) {
                 uint32_t rTmp, counter;
                
                 if (_ptrArray[i] > r)
@@ -151,10 +169,10 @@ bool Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint8_t> &ou
             }
 
             // If the reproduced piece is large enough, use it!
-            if (bestCompCounter > MIN_COMPRESSED_BYTES) {
+            if (bestCompCounter > Algo0x11::MIN_COMPRESSED_BYTES) {
                 r += bestCompCounter;
-                bestCompCounter -= 3;
-                output.push_back(COMPRESSION_FLAG | (bestCompCounter & 0x7F));
+                bestCompCounter -= Algo0x11::MIN_COMPRESSED_BYTES + 1; // adjustments for encoding
+                output.push_back(Algo0x11::COMPRESSION_FLAG | (bestCompCounter & 0x7F));
                 output.push_back(((bestCompCounter >> 1) & 0xC0) | (bestPtr & 0x3F));
                 if (rawDataCounter) {
                     output[rawDataCounterPtr] = static_cast<uint8_t>(rawDataCounter - 1);
@@ -169,7 +187,7 @@ bool Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint8_t> &ou
         if (rawDataCounter == 1) {
             rawDataCounterPtr = static_cast<uint32_t>(output.size());
             output.push_back(0); // placeholder
-        } else if (rawDataCounter == MAX_UNCOMPRESSED_BYTES) {
+        } else if (rawDataCounter == Algo0x11::MAX_UNCOMPRESSED_BYTES) {
             output[rawDataCounterPtr] = 0x7F;
             rawDataCounter = 0;
         }
@@ -177,23 +195,13 @@ bool Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint8_t> &ou
         r++;
     } while (r < size);
 
-    return true;
+    return {};
 }
 
 
 
 
-/*
- * Constructeur - Destructeur
- * Init - Uninit
- */
-Algo0x11::Algo0x11()
-{
-}
-
-Algo0x11::~Algo0x11()
-{
-}
+// LIFECYCLE: Managed by compiler defaults in the header.
 
 
 
@@ -201,31 +209,52 @@ Algo0x11::~Algo0x11()
  * Routine de compression
  * Compression routine
  */
-std::unique_ptr<BandPlane> Algo0x11::compress([[maybe_unused]] const Request& request, std::span<const uint8_t> data, 
+SP::Result<std::unique_ptr<BandPlane>> Algo0x11::compress([[maybe_unused]] const Request& request, std::span<const uint8_t> data, 
         uint32_t width, uint32_t height)
 {
-    uint32_t size = width * height / 8;
-    std::vector<uint8_t> output;
+    // Input sanitization
+    if (width > 32768 || height > 32768 || width == 0 || height == 0) {
+        ERRORMSG(_("Invalid raster dimensions for Algo0x11: %ux%u"), width, height);
+        return SP::Unexpected(SP::Error::InvalidArgument);
+    }
 
-    if (data.empty() || !size) {
+    uint64_t expectedSize = (static_cast<uint64_t>(width) * height) / 8;
+    if (data.size() < expectedSize) {
+        ERRORMSG(_("Input data too small for Algo0x11: got %zu, expected %llu"), data.size(), (unsigned long long)expectedSize);
+        return SP::Unexpected(SP::Error::InvalidArgument);
+    }
+
+    // Safety limit on output size (512MB)
+    if (expectedSize > 512 * 1024 * 1024) {
+        ERRORMSG(_("Output size too large for security safety (0x11)"));
+        return SP::Unexpected(SP::Error::MemoryError);
+    }
+
+    if (data.empty()) {
         ERRORMSG(_("Invalid given data for compression (0x11)"));
-        return nullptr;
+        return SP::Unexpected(SP::Error::InvalidArgument);
     }
 
     // Lookup for the best occurs
-    if (!_lookupBestOccurs(data) || 
-        !_compress(data, output)) {
-        return nullptr;
+    auto lookupRes = _lookupBestOccurs(data);
+    if (!lookupRes) {
+        return SP::Unexpected(lookupRes.error());
+    }
+    
+    std::vector<uint8_t> output;
+    auto compressRes = _compress(data, output);
+    if (!compressRes) {
+        return SP::Unexpected(compressRes.error());
     }
 
     // Register the result into a band plane
     auto plane = std::make_unique<BandPlane>();
-    uint32_t outputSize = static_cast<uint32_t>(output.size());
+    const size_t outputSize = output.size();
     plane->setData(std::move(output));
     plane->setEndian(BandPlane::Endian::Dependant);
     plane->setCompression(0x11);
 
-    DEBUGMSG(_("Finished band encoding: type=0x11, size=%u"), outputSize);
+    DEBUGMSG(_("Finished band encoding: type=0x11, size=%zu"), outputSize);
 
     return plane;
 }

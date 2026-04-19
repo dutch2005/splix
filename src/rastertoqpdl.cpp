@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <cups/cups.h>
 #include "cache.h"
+#include "page.h"
 #include "errlog.h"
 #include "version.h"
 #include "request.h"
@@ -48,7 +49,7 @@ int main(int argc, char **argv)
     title = argv[3];
     options = argv[5];
     file = argc == 7 ? argv[6] : NULL;
-    copies = strtol(argv[4], (char **)NULL, 10);
+    copies = strtol(argv[4], nullptr, 10);
     ppdFile = getenv("PPD");
 
 
@@ -67,8 +68,10 @@ int main(int argc, char **argv)
     }
 
     // Open the PPD file
-    if (!ppd.open(ppdFile, PPDVERSION, options))
+    if (auto res = ppd.open(ppdFile ? ppdFile : "", PPDVERSION, options); !res) {
+        ERRORMSG(_("Failed to open PPD file: %s"), SP::to_string(res.error()).data());
         return 1;
+    }
 
     // Load the request
     if (!request.loadRequest(&ppd, jobid, user, title, copies))

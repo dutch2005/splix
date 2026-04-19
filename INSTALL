@@ -45,17 +45,18 @@ Installation:
 
 	Perform the compilation by following these steps:
 
-		$ mkdir build
-		$ cd build
-		$ cmake ..
-		$ make
+		$ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+		$ cmake --build build --parallel
 
 	If no errors appear you can install the filter and the drivers:
 
-		$ sudo make install
+		$ sudo cmake --install build
 
 	To finish you have to visit http://localhost:631 with your favourite
 	browser and add a new printer by selecting the correct printer in the list.
+
+	For advanced build options (cross-compilation, address sanitizer, presets),
+	see the BUILDING.md file.
 
 	and HAVE FUN ;-)
 
