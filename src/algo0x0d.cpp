@@ -288,26 +288,27 @@ SP::Result<std::unique_ptr<BandPlane>> Algo0x0D::compress(const Request& request
     /* Main encoding loop. */
     while (currentVerticalPenPosition < height) {
         
-        auto scanBits = [&](bool targetSet) -> uint32_t {
+        // Lambda to scan consecutive bits of a specific value (set/unset)
+        auto scanConsecutiveBits = [&](bool targetValue) -> uint32_t {
             uint32_t count = 0;
-            while (rowByteIndex < workWidthRowBytes) {
+            while (pixelsLeftInScanline > 0) {
                 if (rowByteIndex >= scanline.size()) {
-                    /* If we run out of input data before finishing the scanline, 
-                       we must stop to avoid an infinite loop. */
-                    pixelsLeftInScanline = 0; 
-                    return count;
-                }
-
-                bool isSet = (bitMask & scanline[rowByteIndex]) != 0;
-                if (isSet == targetSet && pixelsLeftInScanline > 0) {
-                    count++;
-                    pixelsLeftInScanline--;
-                } else {
+                    pixelsLeftInScanline = 0;
                     break;
                 }
 
+                const bool isSet = (scanline[rowByteIndex] & bitMask) != 0;
+                if (isSet != targetValue) {
+                    break;
+                }
+
+                // Bit matches target value
+                count++;
+                pixelsLeftInScanline--;
+
+                // Advance bit mask and byte index
                 bitMask >>= 1;
-                if (0 == bitMask) {
+                if (bitMask == 0) {
                     bitMask = 0x80;
                     rowByteIndex++;
                 }
@@ -315,82 +316,74 @@ SP::Result<std::unique_ptr<BandPlane>> Algo0x0D::compress(const Request& request
             return count;
         };
 
-        /* Scan for offset value (unset bits). */
-        accumulatedHorizontalOffsetValue = scanBits(false);
+        /* 1. Scan for the offset (consecutive white/unset pixels). */
+        accumulatedHorizontalOffsetValue = scanConsecutiveBits(false);
 
-        /* Now, scan for run count (set bits). */
-        accumulatedRunCount = scanBits(true);
+        /* 2. Scan for the run (consecutive black/set pixels). */
+        accumulatedRunCount = scanConsecutiveBits(true);
 
-        /* We have an offset value and a run count pair. */
-        /* Verify if it's a blank scanline before proceeding. */
-        if ((accumulatedHorizontalOffsetValue == workWidth) && (0 == accumulatedRunCount)) {
-            /* We encountered a blank scanline, so account for it. */
+        /* 3. Handle the captured run/offset pair. */
+        if (accumulatedHorizontalOffsetValue == workWidth && accumulatedRunCount == 0) {
+            /* This was an entirely blank scanline. */
             consecutiveBlankScanLines++;
-        } else if (0 < accumulatedRunCount) {
+        } else if (accumulatedRunCount > 0) {
+            /* We have actual pixels to encode. */
+            const size_t outputSizeBefore = output.size();
 
-            /* We have pixels to encode, proceed. */
-            size_t previousOutputSize = output.size();
-
-            if (output.size() + 10 <= maximumBufferSize) {
-                selectPacketSize(output,
-                        preAccumulatedHorizontalOffsetValue,
-                        accumulatedHorizontalOffsetValue,
-                        currentHorizontalPenPosition,
-                        accumulatedRunCount, consecutiveBlankScanLines,
-                        currentVerticalPenPosition, wrapWidth);
-            } else {
-                /* Here we failed. Unlikely. */
-                ERRORMSG(_("Out of buffer space: 0xd"));
+            // Guard against buffer overflow (though reserved, we stay safe)
+            if (output.size() + 12 > maximumBufferSize) {
+                ERRORMSG(_("Compression buffer limit reached: 0xd"));
                 return SP::Unexpected(SP::Error::MemoryError);
             }
 
-            encodedScanLineSize += static_cast<uint32_t>(output.size() - previousOutputSize);
+            selectPacketSize(output,
+                            preAccumulatedHorizontalOffsetValue,
+                            accumulatedHorizontalOffsetValue,
+                            currentHorizontalPenPosition,
+                            accumulatedRunCount, 
+                            consecutiveBlankScanLines,
+                            currentVerticalPenPosition, 
+                            wrapWidth);
 
-            if (maxEncodedBytesPerScanLine < encodedScanLineSize) {
-                /* We did not fail, but gave up because data is unsuited for
-                  encoding by this algorithm. */
+            const uint32_t bytesProduced = static_cast<uint32_t>(output.size() - outputSizeBefore);
+            encodedScanLineSize += bytesProduced;
+
+            /* Check if this scanline's complexity exceeds the algorithm's density limit. */
+            if (encodedScanLineSize > maxEncodedBytesPerScanLine) {
+                DEBUGMSG(_("Scanline too complex for 0xd (size=%u), giving up."), encodedScanLineSize);
                 return SP::Unexpected(SP::Error::LogicError);
             }
 
-            /* After encoding, reset the blank scan-line counter. */
+            /* Reset the blank scanline counter since we've now hit a non-blank line. */
             consecutiveBlankScanLines = 0;
 
-            /* Update the pen position. This is one way of doing it. */
-            currentHorizontalPenPosition =
-                        workWidth - pixelsLeftInScanline - accumulatedRunCount;
+            /* Update the pen's horizontal tracking. */
+            currentHorizontalPenPosition = workWidth - pixelsLeftInScanline - accumulatedRunCount;
 
-            /* Must pre-accumulate the offset value. */
+            /* Update pre-accumulation for the next packet on this line. */
             preAccumulatedHorizontalOffsetValue = accumulatedRunCount;
         }
 
-        if (0 == pixelsLeftInScanline) {
-            /* Advance the vertical pen position. */
+        /* 4. Check if the scanline is finished. */
+        if (pixelsLeftInScanline == 0) {
+            /* Advance to the next scanline. */
             if (++currentVerticalPenPosition < height) {
-                /* No more pixels left in this scan-line, so go to the next one. */
-                if (scanline.size() > rowBytes) {
+                if (scanline.size() >= rowBytes) {
                     scanline = scanline.subspan(rowBytes);
                 } else {
-                    scanline = {}; // Safety: end of data
+                    scanline = {}; // Safety
                 }
             }
 
-            /* Re-initialize the encoded scan-line data size tracker to zero. */
+            /* Reset scanline-specific counters. */
             encodedScanLineSize = 0;
-
-            /* Reset control variables to initial values. */
             rowByteIndex = 0;
-
-            /* Reset the bit mask. */
             bitMask = 0x80;
-
-            /* Re-init the working width. */
             pixelsLeftInScanline = workWidth;
-
-            /* Reset the pre-accumulated offset value at each scan-line done. */
             preAccumulatedHorizontalOffsetValue = 0;
         }
 
-        /* Always reset the run count and the offset value in every pass. */
+        /* Ensure we don't carry over run/offset counts to the next iteration. */
         accumulatedRunCount = 0;
         accumulatedHorizontalOffsetValue = 0;
     }

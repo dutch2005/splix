@@ -61,6 +61,7 @@ void Algo0x15::_callback(unsigned char *data, size_t data_len, void *arg)
         if (compressor->_data.size() + data_len > compressor->_maxSize) {
             ERRORMSG(_("Insufficient buffer space to store BIE (0x15)"));
             compressor->_error = true;
+            compressor->_errorCode = SP::Error::BufferTooSmall;
             return;
         }
         compressor->_data.insert(compressor->_data.end(), data, data + data_len);

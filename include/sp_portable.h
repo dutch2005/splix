@@ -10,24 +10,24 @@
 #include <cstring>
 #include <ctime>
 
-// --- Header Portability ---
+// --- Platform Detection ---
 #if defined(_WIN32) || defined(_WIN64) || defined(_MSC_VER)
-    #include <io.h>
-    #include <process.h>
     #define SP_PLATFORM_WINDOWS
 #else
-    #include <unistd.h>
     #define SP_PLATFORM_POSIX
 #endif
 
-// --- String Comparison Portability ---
+// --- I/O and Type Portability ---
 #if defined(SP_PLATFORM_WINDOWS)
-    #define SP_STRCASECMP _stricmp
-    #define SP_STRNCASECMP _strnicmp
+    #include <io.h>
+    #include <process.h>
+    #include <basetsd.h>
+    typedef SSIZE_T ssize_t;
+    #define read _read
+    #define write _write
 #else
+    #include <unistd.h>
     #include <strings.h>
-    #define SP_STRCASECMP strcasecmp
-    #define SP_STRNCASECMP strncasecmp
 #endif
 
 // --- Standard File Descriptors ---

@@ -70,7 +70,7 @@ static int _linkFilters(const char *arg1, const char *arg2, const char *arg3,
         close(rasterInput[1]);
         close(rasterInput[0]);
         close(rasterOutput[1]);
-        dup2(rasterOutput[0], STDIN_FILENO);
+        dup2(rasterOutput[0], SP_STDIN_FILENO);
         close(rasterOutput[0]);
         execl(RASTERDIR "/" RASTERTOQPDL, RASTERDIR "/" RASTERTOQPDL, arg1, 
             arg2, arg3, arg4, arg5, static_cast<char*>(nullptr));
@@ -80,13 +80,13 @@ static int _linkFilters(const char *arg1, const char *arg2, const char *arg3,
     DEBUGMSG(_("SpliX launched with PID=%u"), splix);
     
     // Launch the raster
-    dup2(rasterInput[1], STDOUT_FILENO);
+    dup2(rasterInput[1], SP_STDOUT_FILENO);
     close(rasterOutput[0]);
     close(rasterInput[1]);
     if (!(raster = fork())) {
         // Raster code
-        dup2(rasterInput[0], STDIN_FILENO);
-        dup2(rasterOutput[1], STDOUT_FILENO);
+        dup2(rasterInput[0], SP_STDIN_FILENO);
+        dup2(rasterOutput[1], SP_STDOUT_FILENO);
         close(rasterInput[0]);
         close(rasterOutput[1]);
         if (access(RASTERDIR "/" GSTORASTER, F_OK) != -1) {
@@ -231,7 +231,14 @@ int main(int argc, char **argv)
     }
     manufacturer = _toLower(static_cast<const char *>(ppd.get("Manufacturer")));
     paperType = ppd.get("MediaType");
-    if (!(SP_STRCASECMP(paperType, "OFF")))
+    auto compare = [](std::string_view a, std::string_view b) {
+        return std::ranges::equal(a, b, [](char c1, char c2) {
+            return std::tolower(static_cast<unsigned char>(c1)) == 
+                   std::tolower(static_cast<unsigned char>(c2));
+        });
+    };
+
+    if (paperType && compare(paperType, "OFF"))
         paperType = "NORMAL";
 
     // Call the other filters

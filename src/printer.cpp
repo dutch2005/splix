@@ -93,50 +93,59 @@ bool Printer::loadInformation(const Request& request)
     _endPJL = value.deepCopy();
 
     // Get the paper information
-    paperType = request.ppd()->get("MediaSize");
-    if (!paperType)
-        paperType = request.ppd()->get("PageSize");
-    if (!paperType) {
+    const char* rawPaperType = request.ppd()->get("MediaSize");
+    if (!rawPaperType)
+        rawPaperType = request.ppd()->get("PageSize");
+    if (!rawPaperType) {
         ERRORMSG(_("Cannot get paper size information. Operation aborted."));
         return false;
     }
-    if (!(SP_STRCASECMP(paperType, "Letter"))) _paperType = 0;
-    else if (!(SP_STRCASECMP(paperType, "Legal"))) _paperType = 1;
-    else if (!(SP_STRCASECMP(paperType, "A4"))) _paperType = 2;
-    else if (!(SP_STRCASECMP(paperType, "Executive"))) _paperType = 3;
-    else if (!(SP_STRCASECMP(paperType, "Ledger"))) _paperType = 4;
-    else if (!(SP_STRCASECMP(paperType, "A3"))) _paperType = 5;
-    else if (!(SP_STRCASECMP(paperType, "Env10"))) _paperType = 6;
-    else if (!(SP_STRCASECMP(paperType, "Monarch"))) _paperType = 7;
-    else if (!(SP_STRCASECMP(paperType, "C5"))) _paperType = 8;
-    else if (!(SP_STRCASECMP(paperType, "DL"))) _paperType = 9;
-    else if (!(SP_STRCASECMP(paperType, "B4"))) _paperType = 10;
-    else if (!(SP_STRCASECMP(paperType, "B5"))) _paperType = 11;
-    else if (!(SP_STRCASECMP(paperType, "EnvISOB5"))) _paperType = 12;
-    else if (!(SP_STRCASECMP(paperType, "Postcard"))) _paperType = 14;
-    else if (!(SP_STRCASECMP(paperType, "DoublePostcardRotated"))) _paperType = 15;
-    else if (!(SP_STRCASECMP(paperType, "A5"))) _paperType = 16;
-    else if (!(SP_STRCASECMP(paperType, "A6"))) _paperType = 17;
-    else if (!(SP_STRCASECMP(paperType, "B6"))) _paperType = 18;
-    else if (!(SP_STRCASECMP(paperType, "Custom"))) _paperType = 21;
-    else if (!(SP_STRCASECMP(paperType, "C6"))) _paperType = 23;
-    else if (!(SP_STRCASECMP(paperType, "Folio"))) _paperType = 24;
-    else if (!(SP_STRCASECMP(paperType, "EnvPersonal"))) _paperType = 25;
-    else if (!(SP_STRCASECMP(paperType, "Env9"))) _paperType = 26;
-    else if (!(SP_STRCASECMP(paperType, "3x5"))) _paperType = 27;
-    else if (!(SP_STRCASECMP(paperType, "Oficio"))) _paperType = 28;
-    else if (!(SP_STRCASECMP(paperType, "Statement"))) _paperType = 30;
-    else if (!(SP_STRCASECMP(paperType, "roc8k"))) _paperType = 34;
-    else if (!(SP_STRCASECMP(paperType, "roc16k"))) _paperType = 35;
+
+    std::string_view paperTypeView(rawPaperType);
+    auto compare = [](std::string_view a, std::string_view b) {
+        if (a.length() != b.length()) return false;
+        for (size_t i=0; i < a.length(); ++i)
+            if (std::tolower(static_cast<unsigned char>(a[i])) != 
+                std::tolower(static_cast<unsigned char>(b[i]))) return false;
+        return true;
+    };
+
+    if (compare(paperTypeView, "Letter")) _paperType = 0;
+    else if (compare(paperTypeView, "Legal")) _paperType = 1;
+    else if (compare(paperTypeView, "A4")) _paperType = 2;
+    else if (compare(paperTypeView, "Executive")) _paperType = 3;
+    else if (compare(paperTypeView, "Ledger")) _paperType = 4;
+    else if (compare(paperTypeView, "A3")) _paperType = 5;
+    else if (compare(paperTypeView, "Env10")) _paperType = 6;
+    else if (compare(paperTypeView, "Monarch")) _paperType = 7;
+    else if (compare(paperTypeView, "C5")) _paperType = 8;
+    else if (compare(paperTypeView, "DL")) _paperType = 9;
+    else if (compare(paperTypeView, "B4")) _paperType = 10;
+    else if (compare(paperTypeView, "B5")) _paperType = 11;
+    else if (compare(paperTypeView, "EnvISOB5")) _paperType = 12;
+    else if (compare(paperTypeView, "Postcard")) _paperType = 14;
+    else if (compare(paperTypeView, "DoublePostcardRotated")) _paperType = 15;
+    else if (compare(paperTypeView, "A5")) _paperType = 16;
+    else if (compare(paperTypeView, "A6")) _paperType = 17;
+    else if (compare(paperTypeView, "B6")) _paperType = 18;
+    else if (compare(paperTypeView, "Custom")) _paperType = 21;
+    else if (compare(paperTypeView, "C6")) _paperType = 23;
+    else if (compare(paperTypeView, "Folio")) _paperType = 24;
+    else if (compare(paperTypeView, "EnvPersonal")) _paperType = 25;
+    else if (compare(paperTypeView, "Env9")) _paperType = 26;
+    else if (compare(paperTypeView, "3x5")) _paperType = 27;
+    else if (compare(paperTypeView, "Oficio")) _paperType = 28;
+    else if (compare(paperTypeView, "Statement")) _paperType = 30;
+    else if (compare(paperTypeView, "roc8k")) _paperType = 34;
+    else if (compare(paperTypeView, "roc16k")) _paperType = 35;
     else {
-        ERRORMSG(_("Invalid paper size \"%s\". Operation aborted."), paperType);
+        ERRORMSG(_("Invalid paper size \"%s\". Operation aborted."), rawPaperType);
         return false;
     }
 
-    value = request.ppd()->getPageSize(paperType);
+    value = request.ppd()->getPageSize(rawPaperType);
     if (value.width() == 0. || value.height() == 0.) {
-        ERRORMSG(_("Null paper size \"%s\" found. Operation aborted."), 
-            paperType);
+        ERRORMSG(_("Null paper size \"%s\" found. Operation aborted."), rawPaperType);
         return false;
     }
     _pageWidth = value.width();
@@ -144,24 +153,25 @@ bool Printer::loadInformation(const Request& request)
     _hardMarginX = value.marginX();
     _hardMarginY = value.marginY();
 
-    paperSource = request.ppd()->get("InputSlot");
-    if (!paperSource) {
-        paperSource = request.ppd()->get("DefaultInputSlot");
-        if (!paperSource) {
-            paperSource = "Auto";
+    const char* rawPaperSource = request.ppd()->get("InputSlot");
+    if (!rawPaperSource) {
+        rawPaperSource = request.ppd()->get("DefaultInputSlot");
+        if (!rawPaperSource) {
+            rawPaperSource = "Auto";
             ERRORMSG(_("Cannot get input slot information."));
         }
     }
-    if (!(SP_STRCASECMP(paperSource, "Auto"))) _paperSource = 1;
-    else if (!(SP_STRCASECMP(paperSource, "Manual"))) _paperSource = 2;
-    else if (!(SP_STRCASECMP(paperSource, "Multi"))) _paperSource = 3;
-    else if (!(SP_STRCASECMP(paperSource, "Upper"))) _paperSource = 4;
-    else if (!(SP_STRCASECMP(paperSource, "Lower"))) _paperSource = 5;
-    else if (!(SP_STRCASECMP(paperSource, "Envelope"))) _paperSource = 6;
-    else if (!(SP_STRCASECMP(paperSource, "Tray3"))) _paperSource = 7;
+
+    std::string_view sourceView(rawPaperSource);
+    if (compare(sourceView, "Auto")) _paperSource = 1;
+    else if (compare(sourceView, "Manual")) _paperSource = 2;
+    else if (compare(sourceView, "Multi")) _paperSource = 3;
+    else if (compare(sourceView, "Upper")) _paperSource = 4;
+    else if (compare(sourceView, "Lower")) _paperSource = 5;
+    else if (compare(sourceView, "Envelope")) _paperSource = 6;
+    else if (compare(sourceView, "Tray3")) _paperSource = 7;
     else {
-        ERRORMSG(_("Invalid paper source \"%s\". Operation aborted."), 
-            paperSource);
+        ERRORMSG(_("Invalid paper source \"%s\". Operation aborted."), rawPaperSource);
         return false;
     }
 
@@ -216,7 +226,8 @@ bool Printer::sendPJLHeader(const Request& request,
     else
         printf("@PJL SET JAMRECOVERY=OFF\n");
     if (request.printer()->color()) {
-        if (!SP_STRCASECMP(request.ppd()->get("ColorModel"), "CMYK"))
+        const char* colorModel = request.ppd()->get("ColorModel");
+        if (colorModel && compare(colorModel, "CMYK"))
             printf("@PJL SET COLORMODE=COLOR\n");
         else
             printf("@PJL SET COLORMODE=MONO\n");

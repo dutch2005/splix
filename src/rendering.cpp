@@ -58,14 +58,11 @@ static void _compressPage(const Request* request)
                     ERRORMSG(_("Error while reading page from document: %s"), 
                         SP::to_string(res.error()).data());
                     _returnState = false;
-                } else {
-                    fprintf(stderr, ">> Rendering: End of job reached.\n");
                 }
                 setNumberOfPages(document.numberOfPages());
                 break;
             }
             page = std::move(*res);
-            fprintf(stderr, ">> Rendering: Compressing page %lu...\n", (unsigned long)page->pageNr());
         }
 
         // Make rotation on even pages for ManualLongEdge duplex mode

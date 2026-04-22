@@ -137,62 +137,78 @@ SP::Result<> Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint
     //
     // Compress the data
     //
+    /* 6. Main compression loop. */
     do {
-        maxCompSize = size - r > Algo0x11::MAX_COMPRESSED_BYTES ? Algo0x11::MAX_COMPRESSED_BYTES :
-            size - r;
+        const uint32_t remaining = size - r;
+        const uint32_t maxCompSize = std::min<uint32_t>(remaining, Algo0x11::MAX_COMPRESSED_BYTES);
 
-        // End of the compression
-        if (!maxCompSize) {
-            if (rawDataCounter)
+        // a) End of the compression?
+        if (maxCompSize == 0) {
+            if (rawDataCounter > 0) {
                 output[rawDataCounterPtr] = static_cast<uint8_t>(rawDataCounter - 1);
+            }
             break;
+        } 
+        
+        // b) Try to find a match in the pointer table
+        bool matchFound = false;
+        if (maxCompSize >= 2) {
+            uint32_t bestCompCounter = 0;
+            uint32_t bestPtrIndex = 0;
 
-        // Try to compress the next piece of data
-        } else if (maxCompSize >= 2) {
-            bestCompCounter = 0;
-            bestPtr = 0;
-
-            // Check the best similar piece of data
-            for (uint32_t i=0; i < Algo0x11::TABLE_PTR_SIZE; i++) {
-                uint32_t rTmp, counter;
-               
-                if (_ptrArray[i] > r)
+            for (uint32_t i = 0; i < Algo0x11::TABLE_PTR_SIZE; i++) {
+                const uint32_t offset = _ptrArray[i];
+                if (offset > r) {
                     continue;
-                rTmp = r - _ptrArray[i];
-                for (counter = 0; counter < maxCompSize; counter++)
-                    if (data[r + counter] != data[rTmp + counter])
-                        break;
+                }
+
+                // Check how many bytes match at this offset
+                const uint32_t rTmp = r - offset;
+                uint32_t counter = 0;
+                while (counter < maxCompSize && data[r + counter] == data[rTmp + counter]) {
+                    counter++;
+                }
+
                 if (counter > bestCompCounter) {
                     bestCompCounter = counter;
-                    bestPtr = i;
+                    bestPtrIndex = i;
                 }
             }
 
-            // If the reproduced piece is large enough, use it!
+            // If the match is large enough (e.g. > 1 byte saved), use it!
             if (bestCompCounter > Algo0x11::MIN_COMPRESSED_BYTES) {
-                r += bestCompCounter;
-                bestCompCounter -= Algo0x11::MIN_COMPRESSED_BYTES + 1; // adjustments for encoding
-                output.push_back(Algo0x11::COMPRESSION_FLAG | (bestCompCounter & 0x7F));
-                output.push_back(((bestCompCounter >> 1) & 0xC0) | (bestPtr & 0x3F));
-                if (rawDataCounter) {
+                matchFound = true;
+                
+                // Finalize any pending raw data chunk
+                if (rawDataCounter > 0) {
                     output[rawDataCounterPtr] = static_cast<uint8_t>(rawDataCounter - 1);
                     rawDataCounter = 0;
                 }
-                continue;
+
+                r += bestCompCounter;
+                // Encoding format: flag bit | (count-adj)
+                const uint32_t encodedCount = bestCompCounter - (Algo0x11::MIN_COMPRESSED_BYTES + 1);
+                output.push_back(Algo0x11::COMPRESSION_FLAG | (encodedCount & 0x7F));
+                output.push_back(((encodedCount >> 1) & 0xC0) | (bestPtrIndex & 0x3F));
             }
         }
 
-        // Else write the uncompressed data
-        rawDataCounter++;
-        if (rawDataCounter == 1) {
-            rawDataCounterPtr = static_cast<uint32_t>(output.size());
-            output.push_back(0); // placeholder
-        } else if (rawDataCounter == Algo0x11::MAX_UNCOMPRESSED_BYTES) {
-            output[rawDataCounterPtr] = 0x7F;
-            rawDataCounter = 0;
+        // c) If no match, write it as a literal (uncompressed) byte
+        if (!matchFound) {
+            if (rawDataCounter == 0) {
+                rawDataCounterPtr = static_cast<uint32_t>(output.size());
+                output.push_back(0); // Placeholder for count
+            }
+
+            output.push_back(data[r]);
+            r++;
+            rawDataCounter++;
+
+            if (rawDataCounter == Algo0x11::MAX_UNCOMPRESSED_BYTES) {
+                output[rawDataCounterPtr] = 0x7F; // Max literal flag
+                rawDataCounter = 0;
+            }
         }
-        output.push_back(data[r]);
-        r++;
     } while (r < size);
 
     return {};

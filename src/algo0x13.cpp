@@ -133,10 +133,12 @@ SP::Result<std::unique_ptr<BandPlane>> Algo0x13::compress(const Request& request
 
         jbg85_enc_init(&state, width, height, _callback, &info);
         jbg85_enc_options(&state, JBG_LRLTWO | JBG_TPBON, height, 0);
-        for (i = 0; i < height; i++) {
-            const uint8_t* curr = &data[i * wbytes];
-            const uint8_t* prev = (i > 0) ? &data[(i - 1) * wbytes] : nullptr;
-            const uint8_t* prev2 = (i > 1) ? &data[(i - 2) * wbytes] : nullptr;
+
+        for (uint32_t i = 0; i < height; i++) {
+            const size_t rowOffset = static_cast<size_t>(i) * wbytes;
+            const uint8_t* curr = &data[rowOffset];
+            const uint8_t* prev = (i > 0) ? &data[rowOffset - wbytes] : nullptr;
+            const uint8_t* prev2 = (i > 1) ? &data[rowOffset - (2 * wbytes)] : nullptr;
 
             jbg85_enc_lineout(&state,
                                const_cast<unsigned char*>(curr),

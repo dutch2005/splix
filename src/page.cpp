@@ -19,7 +19,7 @@
  * 
  */
 #include "page.h"
-#include <unistd.h>
+#include "sp_portable.h"
 #include <algorithm>
 #include <cstring>
 #include "band.h"

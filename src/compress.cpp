@@ -226,24 +226,32 @@ static SP::Result<> _compressBandedPage(const Request& request, Page* page)
 
             // Copy the data into the band depending on the algorithm options
             if (algo->reverseLineColumn()) {
-                for (uint32_t y=0; y < localHeight; y++) {
-                    uint32_t dstIndex = y;
-                    uint32_t srcBaseIndex = index + hardMarginXInB + y * lineWidthInB;
-                    for (uint32_t x=0; (x < lineWidthInB - hardMarginXInB) && (x < bandWidthInB); x++) {
-                        band[x * bandHeight + y] = planes[i][srcBaseIndex + x];
+                // Special case where columns and lines are swapped (transposed)
+                for (uint32_t y = 0; y < localHeight; y++) {
+                    const uint32_t srcRowStart = index + hardMarginXInB + y * lineWidthInB;
+                    const size_t copyWidth = std::min(static_cast<size_t>(lineWidthInB - hardMarginXInB), 
+                                                   static_cast<size_t>(bandWidthInB));
+                    
+                    for (uint32_t x = 0; x < copyWidth; x++) {
+                        band[x * bandHeight + y] = planes[i][srcRowStart + x];
                     }
-                    for (uint32_t x=lineWidthInB - hardMarginXInB; x < bandWidthInB; x++)
+                    // Filling remaining with 0 if necessary
+                    for (uint32_t x = static_cast<uint32_t>(copyWidth); x < bandWidthInB; x++) {
                         band[x * bandHeight + y] = 0;
+                    }
                 }
             } else {
-                for (uint32_t y=0; y < localHeight; y++) {
-                    uint32_t dstBaseIndex = y * bandWidthInB;
-                    uint32_t srcBaseIndex = index + hardMarginXInB + y * lineWidthInB;
-                    for (uint32_t x=0; (x < lineWidthInB - hardMarginXInB) && (x < bandWidthInB); x++) {
-                        band[dstBaseIndex + x] = planes[i][srcBaseIndex + x];
+                // Standard row-wise copy
+                for (uint32_t y = 0; y < localHeight; y++) {
+                    const uint32_t dstRowStart = y * bandWidthInB;
+                    const uint32_t srcRowStart = index + hardMarginXInB + y * lineWidthInB;
+                    const size_t copyWidth = std::min(static_cast<size_t>(lineWidthInB - hardMarginXInB), 
+                                                   static_cast<size_t>(bandWidthInB));
+
+                    std::ranges::copy(std::span(planes[i] + srcRowStart, copyWidth), band.begin() + dstRowStart);
+                    if (bandWidthInB > copyWidth) {
+                        std::ranges::fill(std::span(band.data() + dstRowStart + copyWidth, bandWidthInB - copyWidth), 0);
                     }
-                    for (uint32_t x=lineWidthInB - hardMarginXInB; x < bandWidthInB; x++)
-                        band[dstBaseIndex + x]  = 0;
                 }
             }
 
@@ -383,14 +391,19 @@ static SP::Result<> _compressBandedJBIGPage(const Request& request, Page* page)
         }
         for (uint32_t i=0; i < page->colorsNr(); i++) {
             for (uint32_t y=0; y < localHeight; y++) {
-                uint32_t dstBaseIndex = y * bufferWidthInB;
-                uint32_t srcBaseIndex = index + y * lineWidthInB;
-                for (uint32_t x=hardMarginXInB; x < xLimitInB; x++)
-                    band[i][x - hardMarginXInB + dstBaseIndex] =
-                             planes[i][srcBaseIndex + x];
-                for (uint32_t x=lineWidthInB - 2 * hardMarginXInB;
-                                   x < bufferWidthInB; x++)
-                    band[i][x + dstBaseIndex] = 0;
+                const uint32_t dstRowStart = y * bufferWidthInB;
+                const uint32_t srcRowStart = index + y * lineWidthInB;
+                const size_t copyWidth = xLimitInB - hardMarginXInB;
+
+                // Copy the actual pixel data
+                std::ranges::copy(std::span(planes[i] + srcRowStart + hardMarginXInB, copyWidth), 
+                                  band[i].begin() + dstRowStart);
+                
+                // Clear the rest of the buffer row
+                if (bufferWidthInB > copyWidth) {
+                    std::ranges::fill(std::span(band[i].data() + dstRowStart + copyWidth, 
+                                                bufferWidthInB - copyWidth), 0);
+                }
             }
         }
         // Are the CMY planes completely empty in the band?
@@ -498,12 +511,12 @@ static SP::Result<> _compressWholePage(const Request& request, Page* page)
 
             index = hardMarginY * (lineWidthInB + 2 * hardMarginXInB) + 
                 hardMarginXInB;
-            for (uint32_t y=0; y < pageHeight; y++, 
-                    index += 2 * hardMarginXInB) {
-                uint32_t dstBase = y * lineWidthInB;
-                for (uint32_t x=0; x < lineWidthInB; x++) {
-                    buffer[dstBase + x] = curPlane[index + x];
-                }
+            for (uint32_t y = 0; y < pageHeight; y++) {
+                const uint32_t dstRowStart = y * lineWidthInB;
+                const uint32_t srcRowStart = index + y * (lineWidthInB + 2 * hardMarginXInB);
+                
+                std::ranges::copy(std::span(curPlane + srcRowStart, lineWidthInB), 
+                                  buffer.begin() + dstRowStart);
             }
             std::fill(buffer.begin() + pageHeight * lineWidthInB, buffer.end(), 0);
 

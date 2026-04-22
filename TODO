@@ -7,11 +7,13 @@
 - Rewrite `compress.cpp` for generalization of runtime compression algorithm modification
 - Check `qpdl.cpp` for a better code
 
-## Modernization Roadmap (2024-2025)
+## Modernization Roadmap (2024-2026)
 - [x] Modernize core data structures (Page, Document, Band, Cache) to C++23
 - [x] Replace legacy synchronization with `std::semaphore` and `std::mutex`
 - [x] Implement Result-based error handling (Phase 9)
 - [x] Build robust unit testing infrastructure (Phase 12)
-- [ ] Audit remaining algorithms (`Algo0x0D`, `Algo0x0E`) for `std::span` compatibility
+- [x] Audit remaining algorithms (`Algo0x0D`, `Algo0x0E`) for `std::span` compatibility
+- [x] Establish SPEQ compliance framework for architectural integrity
 - [ ] Implement SIGTERM handling as noted in heritage TODOs
 - [ ] Optimize rasterization pipeline for high-core-count systems
+

@@ -142,9 +142,6 @@ TEST(Algo0x11Test, LargeEmptyBuffer) {
     EXPECT_NE(result.value(), nullptr);
 }
 
-// Phase 14: Portability Tests
-TEST(PortabilityTest, StringCaseCompare) {
-    EXPECT_EQ(SP_STRCASECMP("test", "TEST"), 0);
-    EXPECT_EQ(SP_STRCASECMP("SpliX", "splix"), 0);
-    EXPECT_NE(SP_STRCASECMP("SpliX", "other"), 0);
-}
+// Phase 14: Modernization Tests
+// StringCaseCompare test removed as SP_STRCASECMP was eliminated in favor of std::ranges::equal
+

@@ -19,7 +19,7 @@
  * 
  */
 #include "band.h"
-#include <unistd.h>
+#include "sp_portable.h"
 #include "errlog.h"
 #include "bandplane.h"
 #include "page.h"

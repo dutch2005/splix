@@ -308,9 +308,17 @@ bool PPDFile::Value::isTrue() const
 {
     if (_out.empty())
         return false;
-    if (_out == "1" || !SP_STRCASECMP(_out.c_str(), "true") || 
-        !SP_STRCASECMP(_out.c_str(), "enable") || !SP_STRCASECMP(_out.c_str(), "enabled") || 
-        !SP_STRCASECMP(_out.c_str(), "yes") || !SP_STRCASECMP(_out.c_str(), "on"))
+
+    auto compare = [this](std::string_view target) {
+        return std::ranges::equal(_out, target, [](char c1, char c2) {
+            return std::tolower(static_cast<unsigned char>(c1)) == 
+                   std::tolower(static_cast<unsigned char>(c2));
+        });
+    };
+
+    if (_out == "1" || compare("true") || 
+        compare("enable") || compare("enabled") || 
+        compare("yes") || compare("on"))
         return true;
     return false;
 }
@@ -365,28 +373,27 @@ bool PPDFile::Value::operator == (std::string_view val) const
 {
     if (_out.empty())
         return false;
-    return !SP_STRCASECMP(_out.c_str(), val.data());
+    return std::ranges::equal(_out, val, [](char c1, char c2) {
+        return std::tolower(static_cast<unsigned char>(c1)) == 
+               std::tolower(static_cast<unsigned char>(c2));
+    });
 }
 
 bool PPDFile::Value::operator == (const char *val) const
 {
     if (_out.empty() || !val)
         return false;
-    return !SP_STRCASECMP(_out.c_str(), val);
+    return (*this) == std::string_view(val);
 }
 
 bool PPDFile::Value::operator != (std::string_view val) const
 {
-    if (_out.empty())
-        return true;
-    return SP_STRCASECMP(_out.c_str(), val.data()) != 0;
+    return !((*this) == val);
 }
 
 bool PPDFile::Value::operator != (const char *val) const
 {
-    if (_out.empty() || !val)
-        return true;
-    return SP_STRCASECMP(_out.c_str(), val) != 0;
+    return !((*this) == val);
 }
 
 

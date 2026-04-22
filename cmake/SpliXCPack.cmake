@@ -21,7 +21,8 @@ set(CPACK_RESOURCE_FILE_LICENSE     "${CMAKE_CURRENT_SOURCE_DIR}/COPYING")
 set(CPACK_GENERATOR                 "DEB")
 set(CPACK_DEBIAN_PACKAGE_SECTION    "misc")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY   "optional")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS    "cups, libcups2, libcupsimage2, libjbig0")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS    "cups")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS  ON)
 
 # ── Architecture detection ───────────────────────────────────────────────────
 # When cross-compiling, CMAKE_SYSTEM_PROCESSOR is set by the toolchain file

@@ -45,15 +45,12 @@ class Algo0x0E : public Algorithm
                                         std::vector<uint8_t> &output,
                                         uint32_t runs,
                                         uint8_t value );
-        uint32_t verifyGain(uint32_t e,
-                                 uint32_t L,
-                                 std::span<const uint8_t> data);
+        uint32_t verifyGain(std::span<const uint8_t> data);
         uint32_t encodeReplications(uint32_t q,
                                          uint32_t L,
                                          std::span<const uint8_t> data,
                                          std::vector<uint8_t> &output);
-        uint32_t locateBackwardReplications(uint32_t L,
-                                                 std::span<const uint8_t> data);
+        uint32_t locateBackwardReplications(std::span<const uint8_t> data);
 
     public:
         Algo0x0E() = default;

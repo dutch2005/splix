@@ -21,7 +21,7 @@
 #include "qpdl.h"
 #include "sp_result.h"
 #include <errno.h>
-#include <unistd.h>
+#include "sp_portable.h"
 #include <inttypes.h>
 #include <string.h>
 #include <math.h>
@@ -34,12 +34,27 @@
 #include <span>
 #include <vector>
 
+/* Helper for safe writing to STDOUT with result propagation */
+static SP::Result<> _safeWrite(std::span<const unsigned char> data)
+{
+    while (!data.empty()) {
+        ssize_t written = write(SP_STDOUT_FILENO, data.data(), data.size());
+        if (written == -1) {
+            if (errno == EINTR) continue;
+            ERRORMSG(_("Error while sending data to the printer (%d)"), errno);
+            return SP::Unexpected(SP::Error::IOError);
+        }
+        data = data.subspan(written);
+    }
+    return {};
+}
+
 /* Support function for algorithm of type 0x15 printers. */
 static SP::Result<> _outputAuxRecords(const Page* page)
 {
     // Get the first plane containing plane data.
     const Band *band = page->firstBand();
-    std::array<unsigned char, 16> header = { 
+    const std::array<unsigned char, 16> header = { 
         0x13, 0, 0, 0, 0x23, 0x15, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0x14 
     };
@@ -47,27 +62,19 @@ static SP::Result<> _outputAuxRecords(const Page* page)
         return {};
 
     // Output record type 0x13 and marker for record 0x14 .
-    if (write(STDOUT_FILENO, header.data(), header.size()) == -1) {
-        ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-        return SP::Unexpected(SP::Error::IOError);
-    }
+    if (auto res = _safeWrite(header); !res) return res;
+
     // Output BIH of JBIG data.
     if (page->getBIH()) {
-        if (write(STDOUT_FILENO, page->getBIH(), 20) == -1) {
-            ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return SP::Unexpected(SP::Error::IOError);
-        }
+        if (auto res = _safeWrite(std::span(reinterpret_cast<const unsigned char*>(page->getBIH()), 20)); !res) return res;
     } else {
-        ERRORMSG(_("Error getting BIH data for page (%u)"), errno);
+        ERRORMSG(_("Error getting BIH data for page"));
         return SP::Unexpected(SP::Error::InconsistentData);
     }
-    header[0] = 0; header[1] = 0; header[2] = 1;
-    header[3] = static_cast<unsigned char>((band->width() >> 8) + 65);
-    if (write(STDOUT_FILENO, header.data(), 4) == -1) {
-        ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-        return SP::Unexpected(SP::Error::IOError);
-    }
-    return {};
+    std::array<unsigned char, 4> trail;
+    trail[0] = 0; trail[1] = 0; trail[2] = 1;
+    trail[3] = static_cast<unsigned char>((band->width() >> 8) + 65);
+    return _safeWrite(trail);
 }
 
 static SP::Result<> _renderJBIGBand([[maybe_unused]] const Request& request, const Band* band, bool mono)
@@ -103,32 +110,27 @@ static SP::Result<> _renderJBIGBand([[maybe_unused]] const Request& request, con
         header[0x5] = static_cast<unsigned char>(band->height());           // Band height 0-7
         header[0x6] = static_cast<unsigned char>(current_color);            // Color number
         header[0x7] = static_cast<unsigned char>(plane->compression());     // Compression algorithm 0x15
-        dataSize = plane->dataSize() + 4;
+        dataSize = static_cast<uint32_t>(plane->dataSize() + 4);
         // Append the last information and send the header
         header[0x8] = static_cast<unsigned char>(dataSize >> 24);            // Data size 24 - 31
         header[0x9] = static_cast<unsigned char>(dataSize >> 16);            // Data size 16 - 23
         header[0xa] = static_cast<unsigned char>(dataSize >> 8);             // Data size 8 - 15
         header[0xb] = static_cast<unsigned char>(dataSize);                  // Data size 0 - 7
-        if (write(STDOUT_FILENO, header.data(), 0xc) == -1) {
-            ERRORMSG(_("Error while sending data (%u)"), errno);
-            return SP::Unexpected(SP::Error::IOError);
-        }
+
+        if (auto res = _safeWrite(std::span(header.data(), 0xC)); !res) return res;
+
         // Send the data
-        auto pSpan = plane->data_span();
-        if (write(STDOUT_FILENO, pSpan.data(), pSpan.size()) == -1) {
-            ERRORMSG(_("Error while sending data (%u)"), errno);
-            return SP::Unexpected(SP::Error::IOError);
-        }
+        if (auto res = _safeWrite(plane->data_span()); !res) return res;
+
         // Calculate and send the checksum
         checkSum  = plane->checksum();
-        header[0] = static_cast<unsigned char>(checkSum >> 24);              // Checksum 24 - 31
-        header[1] = static_cast<unsigned char>(checkSum >> 16);              // Checksum 16 - 23
-        header[2] = static_cast<unsigned char>(checkSum >> 8);               // Checksum 8 - 15
-        header[3] = static_cast<unsigned char>(checkSum);                    // Checksum 0 - 7
-        if (write(STDOUT_FILENO, header.data(), 4) == -1) {
-            ERRORMSG(_("Error while sending data (%u)"), errno);
-            return SP::Unexpected(SP::Error::IOError);
-        }
+        std::array<unsigned char, 4> cs;
+        cs[0] = static_cast<unsigned char>(checkSum >> 24);              // Checksum 24 - 31
+        cs[1] = static_cast<unsigned char>(checkSum >> 16);              // Checksum 16 - 23
+        cs[2] = static_cast<unsigned char>(checkSum >> 8);               // Checksum 8 - 15
+        cs[3] = static_cast<unsigned char>(checkSum);                    // Checksum 0 - 7
+
+        if (auto res = _safeWrite(cs); !res) return res;
     }
     return {};
 }
@@ -206,10 +208,8 @@ static SP::Result<> _renderBand(const Request& request, const Band* band, bool m
         header[size+2] = static_cast<unsigned char>(dataSize >> 16);            // Data size 16 - 23
         header[size+3] = static_cast<unsigned char>(dataSize >> 8);             // Data size 8 - 15
         header[size+4] = static_cast<unsigned char>(dataSize);                  // Data size 0 - 7
-        if (write(STDOUT_FILENO, header.data(), size+5) == -1) {
-            ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return SP::Unexpected(SP::Error::IOError);
-        }
+        header[size+4] = static_cast<unsigned char>(dataSize);                  // Data size 0 - 7
+        if (auto res = _safeWrite(std::span(header.data(), size+5)); !res) return res;
 
         // Send the sub-header
         if (compression != 0x0D && compression != 0x0E) {
@@ -311,19 +311,11 @@ static SP::Result<> _renderBand(const Request& request, const Band* band, bool m
             } else
                 for (unsigned int j=0; j < 4; j++)
                     checkSum += header[size - j - 1];
-            if (write(STDOUT_FILENO, header.data(), size) == -1) {
-                ERRORMSG(_("Error while sending data to the printer (%u)"),
-                    errno);
-                return SP::Unexpected(SP::Error::IOError);
-            }
+            if (auto res = _safeWrite(std::span(header.data(), size)); !res) return res;
         }
         
         // Send the data
-        auto pSpan = plane->data_span();
-        if (write(STDOUT_FILENO, pSpan.data(), pSpan.size()) == -1) {
-            ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return SP::Unexpected(SP::Error::IOError);
-        }
+        if (auto res = _safeWrite(plane->data_span()); !res) return res;
 
         // Send the checksum
         header[0] = static_cast<unsigned char>(checkSum >> 24);                 // Checksum 24 - 31
@@ -337,10 +329,7 @@ static SP::Result<> _renderBand(const Request& request, const Band* band, bool m
             header[4] = 0;
             size++;
         }
-        if (write(STDOUT_FILENO, header.data(), size) == -1) {
-            ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-            return SP::Unexpected(SP::Error::IOError);
-        }
+        if (auto res = _safeWrite(std::span(header.data(), size)); !res) return res;
         planeIdx++;
     }
 
@@ -427,10 +416,7 @@ SP::Result<> renderPage(const Request& request, Page* page, bool lastPage)
     header[0x0] = 1;                                // Signature
     header[0x1] = static_cast<unsigned char>(page->copiesNr() >> 8);            // Number of copies 8-15
     header[0x2] = static_cast<unsigned char>(page->copiesNr());                 // Number of copies 0-7
-    if (write(STDOUT_FILENO, header.data(), 0x3) == -1) {
-        ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
-        return SP::Unexpected(SP::Error::IOError);
-    }
+    if (auto res = _safeWrite(std::span(header.data(), 0x3)); !res) return res;
 
     return {};
 }

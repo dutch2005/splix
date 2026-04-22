@@ -84,36 +84,42 @@ inline void Algo0x0E::addReplicativeRun(
 
 
 
-/* Check if segment at 'e' position and forward can be encoded as 
-   consecutive runs. 'L' limits the width of the seek. */
-uint32_t Algo0x0E::verifyGain(uint32_t e, 
-                                  uint32_t L,
-                                  std::span<const uint8_t> data)
+/* 
+ * Check if the segment starting at the beginning of 'data' can be encoded 
+ * as consecutive runs with a positive encoding gain.
+ * Returns the gain in bytes.
+ */
+uint32_t Algo0x0E::verifyGain(std::span<const uint8_t> data)
 {
-    uint32_t g=0;
+    uint32_t gain = 0;
+    size_t e = 0;
+    const size_t L = data.size();
+
     while (e + 1 < L) {
-        uint32_t u = 1;
-        while (e + u < L && data[e + u - 1] == data[e + u]) {
-            if (++u == 4) {
+        uint32_t runLength = 1;
+        while (e + runLength < L && data[e + runLength - 1] == data[e + runLength]) {
+            if (++runLength == 4) { // Heuristic: cap at 4 for gain verify
                 break;
             }
         }
         
-        if (u >= 2) {
-            g += (u <= 65) ? (u - 2) : (u - 3);
-            if (g >= 2) {
-                return g;
+        if (runLength >= 2) {
+            gain += (runLength <= 65) ? (runLength - 2) : (runLength - 3);
+            if (gain >= 2) {
+                return gain;
             }
-            e += u;
+            e += runLength;
         } else {
             break;
         }
     }
-    return g;
+    return gain;
 }
 
-uint32_t Algo0x0E::encodeReplications(uint32_t q,
-                                          uint32_t L,
+/*
+ * Returns the new 'q' index after encoding as many replicative runs as possible.
+ */
+uint32_t Algo0x0E::encodeReplications(uint32_t q, uint32_t L,
                                           std::span<const uint8_t> data,
                                           std::vector<uint8_t> &output)
 {
@@ -132,11 +138,15 @@ uint32_t Algo0x0E::encodeReplications(uint32_t q,
     return q;
 }
 
-uint32_t Algo0x0E::locateBackwardReplications(uint32_t L,
-                                                  std::span<const uint8_t> data)
+/*
+ * Seeks the beginning position of the last segment of the scan-line 
+ * that can be encoded as contiguous replication runs.
+ */
+uint32_t Algo0x0E::locateBackwardReplications(std::span<const uint8_t> data)
 {
-    /* This must be signed.*/
-    int32_t i = static_cast<int32_t>(L) - 1;     
+    if (data.empty()) return 0;
+
+    int32_t i = static_cast<int32_t>(data.size()) - 1;     
     while (i > 0) {
         uint32_t r = 1;
         while (i - static_cast<int32_t>(r) >= 0 && data[i - r + 1] == data[i - r]) {
@@ -224,7 +234,7 @@ SP::Result<std::unique_ptr<BandPlane>> Algo0x0E::compress([[maybe_unused]] const
         /* If scan-line is not blank and the number of blank padding is 
            not 1, seek the beginning position of the last scan-line segment,
            when it can be encoded as contiguous replication runs. */
-        uint32_t F = ((E > 0) && (B != 1)) ? locateBackwardReplications(E, currentData) : E;
+        uint32_t F = ((E > 0) && (B != 1)) ? locateBackwardReplications(currentData.subspan(0, E)) : E;
   
         /* Try to encode the first segment as replication runs. */
         uint32_t i = (F > 0) ? encodeReplications(0, F, currentData, output) : 0;
@@ -237,7 +247,7 @@ SP::Result<std::unique_ptr<BandPlane>> Algo0x0E::compress([[maybe_unused]] const
             if (currentData[i + l + 1] != currentData[i + l]) {
                 l++;
             } else {
-                if (verifyGain(i + l, F, currentData) >= 2) {
+                if (verifyGain(currentData.subspan(i + l, F - (i + l))) >= 2) {
                     addLiteralSequence(output, currentData, i, l, 0);
                     i = encodeReplications(i + l, F, currentData, output);
                     l = 0;                                
