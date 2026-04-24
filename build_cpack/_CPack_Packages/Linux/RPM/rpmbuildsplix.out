@@ -1,0 +1,13 @@
+Executing(%mkbuilddir): /bin/sh -e /var/tmp/rpm-tmp.7qjILn
+Executing(%prep): /bin/sh -e /var/tmp/rpm-tmp.wWhdmw
+Executing(%install): /bin/sh -e /var/tmp/rpm-tmp.DonouY
+Processing files: splix-2.0.2-1.x86_64
+Provides: config(splix) = 2.0.2-1 splix = 2.0.2-1 splix(x86-64) = 2.0.2-1
+Requires(rpmlib): rpmlib(CompressedFileNames) <= 3.0.4-1 rpmlib(FileDigests) <= 4.6.0-1 rpmlib(PayloadFilesHavePrefix) <= 4.0-1
+Requires: libc.so.6()(64bit) libc.so.6(GLIBC_2.14)(64bit) libc.so.6(GLIBC_2.2.5)(64bit) libc.so.6(GLIBC_2.3.4)(64bit) libc.so.6(GLIBC_2.32)(64bit) libc.so.6(GLIBC_2.34)(64bit) libc.so.6(GLIBC_2.38)(64bit) libc.so.6(GLIBC_2.4)(64bit) libcups.so.2()(64bit) libgcc_s.so.1()(64bit) libgcc_s.so.1(GCC_3.0)(64bit) libgcc_s.so.1(GCC_3.3.1)(64bit) libjbig.so.0()(64bit) libm.so.6()(64bit) libm.so.6(GLIBC_2.2.5)(64bit) libstdc++.so.6()(64bit) libstdc++.so.6(CXXABI_1.3)(64bit) libstdc++.so.6(CXXABI_1.3.9)(64bit) libstdc++.so.6(GLIBCXX_3.4)(64bit) libstdc++.so.6(GLIBCXX_3.4.11)(64bit) libstdc++.so.6(GLIBCXX_3.4.22)(64bit) libstdc++.so.6(GLIBCXX_3.4.26)(64bit) libstdc++.so.6(GLIBCXX_3.4.29)(64bit) libstdc++.so.6(GLIBCXX_3.4.30)(64bit) rtld(GNU_HASH)
+Checking for unpackaged file(s): /usr/lib/rpm/check-files /workspace/build_cpack/_CPack_Packages/Linux/RPM/splix-2.0.2-amd64
+Wrote: /workspace/build_cpack/_CPack_Packages/Linux/RPM/RPMS/splix-2.0.2-amd64.rpm
+Executing(%clean): /bin/sh -e /var/tmp/rpm-tmp.EOw48Z
+Executing(rmbuild): /bin/sh -e /var/tmp/rpm-tmp.9aORoe
+
+RPM build warnings:

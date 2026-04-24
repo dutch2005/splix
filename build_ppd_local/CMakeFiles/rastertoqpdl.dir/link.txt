@@ -1,0 +1,1 @@
+/usr/bin/c++ -flto=auto -fno-fat-lto-objects -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,--dependency-file=CMakeFiles/rastertoqpdl.dir/link.d CMakeFiles/rastertoqpdl.dir/src/rastertoqpdl.cpp.o -o rastertoqpdl  libsplix_core.a /usr/lib/x86_64-linux-gnu/libcups.so /usr/lib/x86_64-linux-gnu/libcupsimage.so /usr/lib/x86_64-linux-gnu/libjbig.so /usr/lib/x86_64-linux-gnu/libcups.so
