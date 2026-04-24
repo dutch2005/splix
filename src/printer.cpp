@@ -27,6 +27,17 @@
 #include "ppdfile.h"
 #include "sp_portable.h"
 
+namespace {
+    /** Case-insensitive string_view comparison (ASCII only). */
+    bool compare(std::string_view a, std::string_view b) {
+        if (a.length() != b.length()) return false;
+        for (size_t i = 0; i < a.length(); ++i)
+            if (std::tolower(static_cast<unsigned char>(a[i])) !=
+                std::tolower(static_cast<unsigned char>(b[i]))) return false;
+        return true;
+    }
+} // anonymous namespace
+
 
 
 /*
@@ -102,13 +113,6 @@ bool Printer::loadInformation(const Request& request)
     }
 
     std::string_view paperTypeView(rawPaperType);
-    auto compare = [](std::string_view a, std::string_view b) {
-        if (a.length() != b.length()) return false;
-        for (size_t i=0; i < a.length(); ++i)
-            if (std::tolower(static_cast<unsigned char>(a[i])) != 
-                std::tolower(static_cast<unsigned char>(b[i]))) return false;
-        return true;
-    };
 
     if (compare(paperTypeView, "Letter")) _paperType = 0;
     else if (compare(paperTypeView, "Legal")) _paperType = 1;

@@ -211,6 +211,16 @@ SP::Result<> Algo0x11::_compress(std::span<const uint8_t> data, std::vector<uint
         }
     } while (r < size);
 
+    // Safety check: if compressed output exceeds input size, compression has
+    // expanded the data. The original driver used a fixed buffer of input size
+    // and returned false on overflow. Match that behavior to protect printer
+    // firmware decompressors that may have fixed receive buffers.
+    if (output.size() >= data.size()) {
+        ERRORMSG(_("No more space available in the output buffer for "
+            "compression"));
+        return SP::Unexpected(SP::Error::CompressionError);
+    }
+
     return {};
 }
 

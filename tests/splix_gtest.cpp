@@ -114,10 +114,10 @@ TEST(Algo0x11Test, CompressionCorrectness) {
     Algo0x11 algo;
     Request request;
     
-    // Sample input: 16 bytes of repeating data (highly compressible)
-    std::vector<uint8_t> src(16, 0xAA);
+    // Sample input: 1024 bytes of repeating data (highly compressible)
+    std::vector<uint8_t> src(1024, 0xAA);
     
-    auto result = algo.compress(request, src, 4, 4);
+    auto result = algo.compress(request, src, 128, 64);
     ASSERT_TRUE(result.has_value());
     EXPECT_NE(result.value(), nullptr);
 }

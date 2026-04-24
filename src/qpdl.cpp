@@ -208,18 +208,15 @@ static SP::Result<> _renderBand(const Request& request, const Band* band, bool m
         header[size+2] = static_cast<unsigned char>(dataSize >> 16);            // Data size 16 - 23
         header[size+3] = static_cast<unsigned char>(dataSize >> 8);             // Data size 8 - 15
         header[size+4] = static_cast<unsigned char>(dataSize);                  // Data size 0 - 7
-        header[size+4] = static_cast<unsigned char>(dataSize);                  // Data size 0 - 7
         if (auto res = _safeWrite(std::span(header.data(), size+5)); !res) return res;
 
         // Send the sub-header
         if (compression != 0x0D && compression != 0x0E) {
             switch (plane->endian()) {
                 case BandPlane::Endian::Dependant: {
+                    // Machine-native byte order — must match original uint32_t* cast behavior
                     uint32_t sig = static_cast<uint32_t>(0x09ABCDEF + (subVersion << 28));
-                    header[0x0] = static_cast<unsigned char>(sig >> 24);
-                    header[0x1] = static_cast<unsigned char>(sig >> 16);
-                    header[0x2] = static_cast<unsigned char>(sig >> 8);
-                    header[0x3] = static_cast<unsigned char>(sig);
+                    memcpy(&header[0x0], &sig, sizeof(sig));
                     break;
                 }
                 case BandPlane::Endian::BigEndian:
@@ -257,15 +254,10 @@ static SP::Result<> _renderBand(const Request& request, const Band* band, bool m
 
                 switch (plane->endian()) {
                     case BandPlane::Endian::Dependant: {
+                        // Machine-native byte order — must match original uint32_t* cast behavior
                         uint32_t udSize = static_cast<uint32_t>(dSize);
-                        header[size+0] = static_cast<unsigned char>(udSize >> 24);
-                        header[size+1] = static_cast<unsigned char>(udSize >> 16);
-                        header[size+2] = static_cast<unsigned char>(udSize >> 8);
-                        header[size+3] = static_cast<unsigned char>(udSize);
-                        header[size+4] = static_cast<unsigned char>(state >> 24);
-                        header[size+5] = static_cast<unsigned char>(state >> 16);
-                        header[size+6] = static_cast<unsigned char>(state >> 8);
-                        header[size+7] = static_cast<unsigned char>(state);
+                        memcpy(&header[size], &udSize, sizeof(udSize));
+                        memcpy(&header[size + 4], &state, sizeof(state));
                         break;
                     }
                     case BandPlane::Endian::BigEndian:
@@ -403,6 +395,21 @@ SP::Result<> renderPage(const Request& request, Page* page, bool lastPage)
     header[0x8] = static_cast<unsigned char>(height);                           // Printable area height
     header[0x9] = static_cast<unsigned char>(paperSource);                      // Paper source
     header[0xa] = static_cast<unsigned char>(request.printer()->unknownByte1());// ??? XXX
+    header[0xb] = duplex;                           // Duplex
+    header[0xc] = tumble;                           // Tumble
+    header[0xd] = static_cast<unsigned char>(request.printer()->unknownByte2());// ??? XXX
+    header[0xe] = static_cast<unsigned char>(request.printer()->qpdlVersion()); // QPDL Version
+    header[0xf] = static_cast<unsigned char>(request.printer()->unknownByte3());// ??? XXX
+    header[0x10] = static_cast<unsigned char>(page->xResolution() / 100);       // X Resolution
+    if (auto res = _safeWrite(std::span(header.data(), 0x11)); !res) return res;
+
+    // Send auxiliary records for clp-315 printers.
+    if (0x15 == page->compression()) {
+        auto auxRes = _outputAuxRecords(page);
+        if (!auxRes)
+            return auxRes;
+    }
+
     // Send the page bands
     band = page->firstBand();
     while (band) {
