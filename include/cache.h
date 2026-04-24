@@ -89,7 +89,6 @@ class CacheEntry {
         std::unique_ptr<Page>   _page = nullptr;
         CacheEntry*             _previous = nullptr;
         CacheEntry*             _next = nullptr;
-        std::string             _tempFile = "";
         SP::Error               _error = SP::Error::None;
 
     public:
@@ -115,16 +114,6 @@ class CacheEntry {
           */
         void                    setPrevious(CacheEntry *entry) 
                                     {_previous = entry;}
-        /**
-          * Swap the page instance on the disk.
-          * @return a Result indicating success or error.
-          */
-        SP::Result<>            swapToDisk();
-        /**
-          * Restore a previously swapped page into memory.
-          * @return a Result indicating success or error.
-          */
-        SP::Result<>            restoreIntoMemory();
 
         /**
           * @return the page instance pointer.
@@ -142,12 +131,7 @@ class CacheEntry {
           * @return the previous instance.
           */
         CacheEntry*             previous() const {return _previous;}
-        /**
-          * @return TRUE if the page is currently swapped on disk. Otherwise
-          *         returns FALSE.
-          */
-        bool                    isSwapped() const 
-                                    {return !_tempFile.empty();}
+
         /**
           * @return the error associated with this entry, if any.
           */

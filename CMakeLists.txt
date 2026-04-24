@@ -23,7 +23,7 @@ option(DISABLE_JBIG "Disable JBIG compression" OFF)
 option(DISABLE_THREADS "Disable POSIX threads" OFF)
 option(DISABLE_BLACKOPTIM "Disable black optimization" OFF)
 set(THREADS "2" CACHE STRING "Number of threads to use")
-set(CACHESIZE "30" CACHE STRING "Cache size in MB")
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Static Analysis & Tooling

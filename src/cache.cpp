@@ -61,267 +61,52 @@ static uint32_t _pagesInTable = 0;
 static std::vector<std::unique_ptr<CacheEntry>> _pages;
 static std::mutex _pageTableLock;
 
-// Cache in memory variables
-static CacheEntry *_inMemory = nullptr, *_inMemoryLast = nullptr;
-static uint32_t _pagesInMemory = 0;
 
 
-
-/*
- * Contrôleur de cache (thread)
- * Cache controller (thread)
- */
-static void __registerIntoCacheList(CacheEntry *entry, bool swapLast)
+static void _cacheControllerThread(std::stop_token stopToken)
 {
-    unsigned long pageNr;
-    CacheEntry *tmp = nullptr;
-
-    if (!_inMemory) {
-        entry->setNext(nullptr);
-        entry->setPrevious(nullptr);
-        _inMemory = entry;
-        _inMemoryLast = entry;
-        _pagesInMemory = 1;
-        return;
-    }
-
-    // Locate the previous cache entry
-    pageNr = entry->page()->pageNr();
-    switch (_policy) {
-        case OddIncreasing:
-        case EveryPagesIncreasing:
-            tmp = _inMemoryLast;
-            while (tmp && tmp->page()->pageNr() > pageNr)
-                tmp = tmp->previous();
-            break;
-        case EvenDecreasing:
-            if (pageNr % 2) {
-                // Odd page
-                tmp = _inMemoryLast;
-                while (tmp) {
-                    if (!(tmp->page()->pageNr() % 2) || tmp->page()->pageNr() < 
-                        pageNr)
-                        break;
-                    tmp = tmp->previous();
-                }
-
-            } else {
-                // Even page
-                tmp = _inMemory;
-                while (tmp && !(tmp->page()->pageNr() % 2)) {
-                    if (tmp->page()->pageNr() < pageNr)
-                        break;
-                    tmp = tmp->next();
-                }
-                tmp = tmp ? tmp->previous() : _inMemoryLast;
-            }
-            break;
-    }
-
-    // Register the new entry
-    if (swapLast && tmp == _inMemoryLast) {
-        auto res = entry->swapToDisk();
-        if (!res) {
-            ERRORMSG(_("Failed to swap page %lu to disk: %s"), 
-                     static_cast<unsigned long>(entry->page()->pageNr()), 
-                     SP::to_string(res.error()).data());
-        }
-        swapLast = false;
-    } else {
-        if  (!tmp) {
-            entry->setPrevious(NULL);
-            entry->setNext(_inMemory);
-            _inMemory->setPrevious(entry);
-            _inMemory = entry;
-        } else {
-            entry->setPrevious(tmp);
-            entry->setNext(tmp->next());
-            if (tmp->next())
-                tmp->next()->setPrevious(entry);
-            else
-                _inMemoryLast = entry;
-            tmp->setNext(entry);
-        }
-        if (!swapLast)
-            _pagesInMemory++;
-    }
-
-    // Swap to disk the last entry if needed
-    if (swapLast) {
-        tmp = _inMemoryLast;
-        _inMemoryLast = tmp->previous();
-        if (tmp->previous())
-            tmp->previous()->setNext(nullptr);
-        auto res = tmp->swapToDisk();
-        if (!res) {
-            ERRORMSG(_("Failed to swap page %lu to disk: %s"), 
-                     static_cast<unsigned long>(tmp->page()->pageNr()), 
-                     SP::to_string(res.error()).data());
-        }
-    }
-}
-
-static void __manageMemoryCache(CacheEntry *entry)
-{
-    std::lock_guard<std::mutex> lock(_pageTableLock);
-
-    // Append an entry
-    if (entry) {
-        __registerIntoCacheList(entry, _pagesInMemory >= CACHESIZE);
-
-    // Preload the best page
-    } else {
-        unsigned int nr;
-
-        if (_inMemoryLast)
-            nr = _inMemoryLast->page()->pageNr();
-        else
-            nr = static_cast<unsigned int>(_lastPageRequested);
-
-        switch (_policy) {
-            case EveryPagesIncreasing:
-                nr++;
-                break;
-            case OddIncreasing:
-                if (nr % 2)
-                    nr += 2;
-                else if (nr > 2)
-                    nr -= 2;
-                else
-                    nr = 1;
-                break;
-            case EvenDecreasing:
-                if (nr == 2)
-                    nr = 1;
-                else
-                    nr -= 2;
-                break;
-        }
-        if (nr <= _pages.size() && _pages[nr-1]) {
-            if (_pages[nr-1]->isSwapped()) {
-                auto res = _pages[nr-1]->restoreIntoMemory();
-                if (!res) {
-                    ERRORMSG(_("Failed to restore page %u from disk: %s"), 
-                             nr, SP::to_string(res.error()).data());
-                    _pages[nr-1]->setError(res.error());
-                    if (nr == _pageRequested)
-                        _pageAvailable.release();
-                    return;
-                }
-            }
-            _pages[nr-1]->setNext(nullptr);
-            _pages[nr-1]->setPrevious(_inMemoryLast);
-            if (_inMemoryLast) {
-                _inMemoryLast->setNext(_pages[nr-1].get());
-                _inMemoryLast = _pages[nr-1].get();
-            } else {
-                _inMemory = _pages[nr-1].get();
-                _inMemoryLast = _pages[nr-1].get();
-            }
-            _pagesInMemory++;
-            if (nr == _pageRequested)
-                _pageAvailable.release();
-        }
-    }
-}static void _cacheControllerThread(std::stop_token stopToken)
-{
-    bool whatToDo = true;
-
     DEBUGMSG(_("Cache controller thread loaded and is waiting for a job"));
     while (!stopToken.stop_requested()) {
-        bool preloadPage = false;
-
         // Waiting for a job
         _work.acquire();
-
-#ifdef DUMP_CACHE
-        if (_pagesInMemory) {
-            CacheEntry *tmp = _inMemory;
-
-            fprintf(stderr, _("DEBUG: \033[34mCache dump: "));
-            for (unsigned int i=0; i < _pagesInMemory && tmp; i++) {
-                fprintf(stderr, "%lu ", tmp->page()->pageNr());
-                tmp = tmp->next();
-            }
-            fprintf(stderr, "\033[0m\n");
-        } else
-            fprintf(stderr, _("DEBUG: \033[34mCache empty\033[0m\n"));
-#endif /* DUMP_CACHE */
 
         // Does the thread needs to exit?
         if (stopToken.stop_requested())
             break;
 
+        CacheEntry *entry = nullptr;
 
-        /*
-         * Check what action to do
-         */
-        // Nothing?
-        if (!_waitingList && (_pagesInMemory == CACHESIZE || 
-            _pagesInMemory == _pagesInTable))
+        // Get the cache entry to store
+        {
+            std::lock_guard<std::mutex> lock(_waitingListLock);
+            entry = _waitingList;
+            if (entry) {
+                _waitingList = entry->next();
+                if (_lastWaitingList == entry)
+                    _lastWaitingList = nullptr;
+            }
+        }
+
+        if (!entry)
             continue;
-        // new page to append and pages to preload?
-        // Choose one action of them to do (and inverse the action to do at 
-        // each loop)
-        if (_waitingList && !(_pagesInMemory == CACHESIZE || 
-            _pagesInMemory == _pagesInTable)) {
-            preloadPage = whatToDo;
-            whatToDo = !whatToDo;
-        // One of the two thing to do
-        } else
-            preloadPage = (_waitingList == nullptr);
 
-        /*
-         * Preload a page
-         */
-        if (preloadPage) {
-            __manageMemoryCache(NULL);
+        // Store the entry in the page table
+        {
+            std::lock_guard<std::mutex> lock(_pageTableLock);
 
-        /*
-         * Store a page
-         */
-        } else {
-            CacheEntry *entry;
-
-            // Get the cache entry to store
-            {
-                std::lock_guard<std::mutex> lock(_waitingListLock);
-                entry = _waitingList;
-                if (entry) {
-                    _waitingList = entry->next();
-                    if (_lastWaitingList == entry)
-                        _lastWaitingList = nullptr;
-                }
+            // Resize the page table if needed
+            if (entry->page()->pageNr() > _pages.size()) {
+                _pages.resize(entry->page()->pageNr());
             }
 
-            if (!entry)
-                continue;
+            // Store the page in the table
+            _pages[entry->page()->pageNr() - 1] = std::unique_ptr<CacheEntry>(entry);
+        }
+        _pagesInTable++;
 
-            // Store the entry in the page table
-            {
-                std::lock_guard<std::mutex> lock(_pageTableLock);
-
-                // Resize the page table if needed
-                if (entry->page()->pageNr() > _pages.size()) {
-                    _pages.resize(entry->page()->pageNr());
-                }
-
-                // Store the page in the table
-                _pages[entry->page()->pageNr() - 1] = std::unique_ptr<CacheEntry>(entry);
-            }
-            _pagesInTable++;
-
-            // Does the main thread needs this page?
-            if (_pageRequested == entry->page()->pageNr()) {
-                std::lock_guard<std::mutex> lock(_pageTableLock);
-                entry->setNext(nullptr);
-                entry->setPrevious(nullptr);
-                _pageAvailable.release();
-
-            // So check whether the page can be kept in memory or have to
-            // be swapped on the disk
-            } else 
-                __manageMemoryCache(entry);
+        // Does the main thread need this page?
+        if (_pageRequested == entry->page()->pageNr()) {
+            _pageAvailable.release();
         }
     }
 
@@ -399,7 +184,6 @@ SP::Result<std::unique_ptr<Page>> getNextPage()
 {
     CacheEntry *entry = nullptr;
     uint32_t nr = 0;
-    bool notUnregister = false;
 
     // Get the next page number
     switch (_policy) {
@@ -422,15 +206,14 @@ SP::Result<std::unique_ptr<Page>> getNextPage()
             break;
     }
 
-    DEBUGMSG(_("Next requested page : %lu (# pages into memory=%lu/%u)"), static_cast<unsigned long>(nr), 
-        static_cast<unsigned long>(_pagesInMemory), CACHESIZE);
+    DEBUGMSG(_("Next requested page : %lu (# pages into memory=%lu)"), static_cast<unsigned long>(nr), 
+        static_cast<unsigned long>(_pagesInTable));
 
     // Wait for the page
     while (nr && (!_pageLimitKnown || _numberOfPages >= nr)) {
         {
             std::lock_guard<std::mutex> lock(_pageTableLock);
-            if (_pages.size() >= nr && _pages[nr - 1] && 
-                !_pages[nr - 1]->isSwapped()) {
+            if (_pages.size() >= nr && _pages[nr - 1]) {
                 
                 entry = _pages[nr - 1].get();
                 
@@ -439,20 +222,8 @@ SP::Result<std::unique_ptr<Page>> getNextPage()
                     return SP::Unexpected(entry->error());
                 }
 
-                if (!entry->previous() && !entry->next() && entry != _inMemory)
-                    notUnregister = true;
-                if (entry->previous())
-                    entry->previous()->setNext(entry->next());
-                if (entry->next())
-                    entry->next()->setPrevious(entry->previous());
-                if (entry == _inMemory)
-                    _inMemory = entry->next();
-                if (entry == _inMemoryLast)
-                    _inMemoryLast = entry->previous();
                 break;
-            } else if (_pages.size() >= nr && _pages[nr - 1] && 
-                _pages[nr - 1]->isSwapped())
-                _work.release();
+            }
             _pageRequested = nr;
         }
         _pageAvailable.acquire();
@@ -471,10 +242,7 @@ SP::Result<std::unique_ptr<Page>> getNextPage()
     auto page = entryPtr->releasePage();
     // entryPtr (the CacheEntry) is destroyed here when we return or at end of scope
 
-    // Preload a new page
-    if (!notUnregister)
-        _pagesInMemory--;
-    _work.release();
+    // entryPtr (the CacheEntry) is destroyed here when we return or at end of scope
 
     return page;
 }
@@ -524,79 +292,6 @@ CacheEntry::CacheEntry(std::unique_ptr<Page> page) : _page(std::move(page))
 
 CacheEntry::~CacheEntry()
 {
-    if (!_tempFile.empty()) {
-        ERRORMSG(_("Destroy a cache entry which is still swapped on disk."));
-        unlink(_tempFile.c_str());
-    }
-}
-
-SP::Result<> CacheEntry::swapToDisk()
-{
-    char path[] = "/tmp/splixV2-pageXXXXXX";
-    int fd;
-
-    if (!_tempFile.empty()) {
-        ERRORMSG(_("Trying to swap a page instance on the disk which is "
-            "already swapped."));
-        return SP::Unexpected(SP::Error::InvalidState);
-    }
-
-    // Create the temporarily file
-    if ((fd = mkstemp(path)) == -1) {
-        ERRORMSG(_("Cannot swap a page into disk (%i)"), errno);
-        return SP::Unexpected(SP::Error::IOError);
-    }
-    _tempFile = path;
-
-    // Swap the instance into the file
-    auto res = _page->swapToDisk(fd);
-    if (!_page || !res) {
-        unlink(_tempFile.c_str());
-        _tempFile.clear();
-        ERRORMSG(_("Cannot swap a page into disk"));
-        close(fd);
-        return res.has_value() ? SP::Unexpected(SP::Error::SerializationError) : res;
-    }
-
-    DEBUGMSG(_("Page %lu swapped to disk"), static_cast<unsigned long>(_page->pageNr()));
-    close(fd);
-    _page.reset();
-
-    return {};
-}
-
-SP::Result<> CacheEntry::restoreIntoMemory()
-{
-    int fd;
-
-    if (_tempFile.empty()) {
-        ERRORMSG(_("Trying to restore a page instance into memory which is "
-            "already into memory"));
-        return SP::Unexpected(SP::Error::InvalidState);
-    }
-
-    // Open the swap file
-    if ((fd = open(_tempFile.c_str(), O_RDONLY)) == -1) {
-        ERRORMSG(_("Cannot restore page into memory (%i)"), errno);
-        return SP::Unexpected(SP::Error::IOError);
-    }
-
-    // Restore the instance
-    auto res = Page::restoreIntoMemory(fd);
-    if (!res) {
-        ERRORMSG(_("Cannot restore page into memory: %s"), SP::to_string(res.error()).data());
-        close(fd);
-        return SP::Unexpected(res.error());
-    }
-    _page = std::move(*res);
-
-    // Destroy the swap file
-    close(fd);
-    unlink(_tempFile.c_str());
-    _tempFile.clear();
-
-    DEBUGMSG(_("Page %lu restored into memory"), static_cast<unsigned long>(_page->pageNr()));
-    return {};
 }
 
 #endif /* DISABLE_THREADS */

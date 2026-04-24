@@ -230,18 +230,7 @@ class Page
         const Band*             firstBand() const {return _firstBand.get();}
 
     public:
-        /**
-          * Swap this instance on the disk.
-          * @param fd the file descriptor where the instance has to be swapped
-          * @return a Result indicating success or error.
-          */
-        SP::Result<>            swapToDisk(int fd);
-        /**
-          * Restore an instance from the disk into memory.
-          * @param fd the file descriptor where the instance has been swapped
-          * @return a Result containing the page instance or an error.
-          */
-        static SP::Result<std::unique_ptr<Page>> restoreIntoMemory(int fd);
+
         /**
           * Register an independent copy of the BIH data. 
           * @param bih_data the BIH for JBIG data.

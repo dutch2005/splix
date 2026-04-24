@@ -117,76 +117,7 @@ void Page::flushPlanes()
     _empty = false;
 }
 
-/*
- * Mise sur disque / Rechargement
- * Swapping / restoring
- */
-SP::Result<> Page::swapToDisk(int fd)
-{
-    if (!_planes[0].empty() || !_planes[1].empty() || !_planes[2].empty() || !_planes[3].empty()) {
-        ERRORMSG(_("Cannot swap page instance which still contains bitmap "
-            "representation"));
-        return SP::Unexpected(SP::Error::InvalidState);
-    }
-    
-    if (write(fd, &_xResolution, sizeof(_xResolution)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_yResolution, sizeof(_yResolution)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_width, sizeof(_width)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_height, sizeof(_height)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_colors, sizeof(_colors)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_pageNr, sizeof(_pageNr)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_copiesNr, sizeof(_copiesNr)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_compression, sizeof(_compression)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_empty, sizeof(_empty)) == -1) return SP::Unexpected(SP::Error::IOError);
-    if (write(fd, &_bandsNr, sizeof(_bandsNr)) == -1) return SP::Unexpected(SP::Error::IOError);
-    
-    if (0x15 == _compression && _bandsNr > 0 && !_bih.empty()) {
-        if (write(fd, _bih.data(), 20) == -1) return SP::Unexpected(SP::Error::IOError);
-    }
-    
-    Band* band = _firstBand.get();
-    while (band) {
-        auto res = band->swapToDisk(fd);
-        if (!res)
-            return res;
-        band = band->sibling();
-    }
 
-    return {};
-}
-
-SP::Result<std::unique_ptr<Page>> Page::restoreIntoMemory(int fd)
-{
-    auto page = std::make_unique<Page>();
-    uint32_t bandsCount = 0;
-
-    if (read(fd, &page->_xResolution, sizeof(page->_xResolution)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_yResolution, sizeof(page->_yResolution)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_width, sizeof(page->_width)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_height, sizeof(page->_height)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_colors, sizeof(page->_colors)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_pageNr, sizeof(page->_pageNr)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_copiesNr, sizeof(page->_copiesNr)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_compression, sizeof(page->_compression)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &page->_empty, sizeof(page->_empty)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    if (read(fd, &bandsCount, sizeof(bandsCount)) <= 0) return SP::Unexpected(SP::Error::IOError);
-    
-    if (0x15 == page->_compression && bandsCount > 0) {
-        uint8_t bih[20];
-        if (read(fd, bih, 20) <= 0) return SP::Unexpected(SP::Error::IOError);
-        page->setBIH(bih, 20);
-    }
-    
-    for (uint32_t i = 0; i < bandsCount; i++) {
-        auto band_res = Band::restoreIntoMemory(fd);
-        if (!band_res) {
-            return SP::Unexpected(band_res.error());
-        }
-        page->registerBand(std::move(*band_res));
-    }
-
-    return page;
-}
 
 void Page::setBIH(const uint8_t *bih_data, size_t size) {
     _bih.assign(bih_data, bih_data + size);
