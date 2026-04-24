@@ -197,7 +197,7 @@ SP::Result<std::unique_ptr<Page>> Document::getNextRawPage([[maybe_unused]] cons
         page->pageNr(), header.cupsWidth, header.cupsHeight, 
         page->width(), page->height());
 
-    return std::move(page);
+    return page;
 }
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */

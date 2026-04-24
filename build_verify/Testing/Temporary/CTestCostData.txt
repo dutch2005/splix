@@ -1,0 +1,15 @@
+PrinterTest.Initialization 1 0.0324998
+PrinterTest.MoveSemantics 1 0.0322071
+PrinterTest.DefaultInitialization 1 0.0328431
+PPDValueTest.StringSafety 1 0.0294452
+SemaphoreTest.BasicAcquireRelease 1 0.0302225
+SemaphoreTest.MultiRelease 1 0.0259594
+SemaphoreTest.ThreadSync 1 0.0896675
+Algo0x11Test.CompressionCorrectness 1 0.0345934
+Algo0x11Test.EmptyInput 1 0.030935
+Algo0x11Test.LargeEmptyBuffer 1 0.0357617
+rastertoqpdl_usage 1 0.0325365
+pstoqpdl_usage 1 0.0232115
+driver_functional_raster 0 0
+---
+driver_functional_raster

@@ -1,0 +1,5 @@
+if(EXISTS "/workspace/build_verify/splix_gtest[1]_tests.cmake")
+  include("/workspace/build_verify/splix_gtest[1]_tests.cmake")
+else()
+  add_test(splix_gtest_NOT_BUILT splix_gtest_NOT_BUILT)
+endif()
