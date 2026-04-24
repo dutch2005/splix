@@ -17,12 +17,19 @@ set(CPACK_PACKAGE_CONTACT           "github-actions@noreply.github.com")
 set(CPACK_PACKAGE_HOMEPAGE_URL      "https://github.com/dutch2005/splix")
 set(CPACK_RESOURCE_FILE_LICENSE     "${CMAKE_CURRENT_SOURCE_DIR}/COPYING")
 
+# ── Generator settings ─────────────────────────────────────────────────────────
+set(CPACK_GENERATOR                 "DEB;RPM")
+
 # ── DEB-specific settings ────────────────────────────────────────────────────
-set(CPACK_GENERATOR                 "DEB")
 set(CPACK_DEBIAN_PACKAGE_SECTION    "misc")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY   "optional")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS    "cups")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS  ON)
+
+# ── RPM-specific settings ────────────────────────────────────────────────────
+set(CPACK_RPM_PACKAGE_REQUIRES      "cups")
+set(CPACK_RPM_PACKAGE_LICENSE       "GPL-2.0")
+set(CPACK_RPM_PACKAGE_GROUP         "System Environment/Daemons")
 
 # ── Architecture detection ───────────────────────────────────────────────────
 # When cross-compiling, CMAKE_SYSTEM_PROCESSOR is set by the toolchain file
