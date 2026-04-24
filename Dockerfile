@@ -1,5 +1,5 @@
 # SpliX Modernized Build Environment
-FROM debian:trixie-slim
+FROM ubuntu:26.04
 
 LABEL maintainer="SpliX Modernization Team"
 LABEL version="2026.2"
@@ -8,7 +8,7 @@ LABEL version="2026.2"
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install core build dependencies
-# Debian trixie ships GCC 14 with full C++23 std::expected support
+# Ubuntu 26.04 ships with modern GCC natively
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \

@@ -1,6 +1,7 @@
 # SpliX Roadmap & Tasks
 
 ## Heritage TODOs (2006-2008)
+
 - Add other compression algorithms (0x12 for text!)?
 - Stop sending the job if a SIGTERM is received
 - Catch for the cancel button pressed
@@ -8,6 +9,7 @@
 - Check `qpdl.cpp` for a better code
 
 ## Modernization Roadmap (2024-2026)
+
 - [x] Modernize core data structures (Page, Document, Band, Cache) to C++23
 - [x] Replace legacy synchronization with `std::semaphore` and `std::mutex`
 - [x] Implement Result-based error handling (Phase 9)
@@ -16,4 +18,3 @@
 - [x] Establish SPEQ compliance framework for architectural integrity
 - [ ] Implement SIGTERM handling as noted in heritage TODOs
 - [ ] Optimize rasterization pipeline for high-core-count systems
-

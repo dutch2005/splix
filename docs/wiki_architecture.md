@@ -78,4 +78,4 @@ Samsung printers support several proprietary or standard compression algorithms 
 10. Once all pages are done, `printer.cpp` writes the PJL footer and exits.
 
 ---
-*Created during the Modernization Initiative, 2026.*
+Created during the Modernization Initiative, 2026.

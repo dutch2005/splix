@@ -25,7 +25,7 @@ else
     CMAKE_PRESET="ci-amd64"
 fi
 
-echo ">> Spawning debian:oldstable container... (This may take a minute)"
+echo ">> Spawning ubuntu:26.04 container... (This may take a minute)"
 
 docker run --rm \
   -v "${ROOT_DIR}:/workspace" \

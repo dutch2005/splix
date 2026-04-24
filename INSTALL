@@ -1,107 +1,70 @@
-HOW-TO INSTALL AND USE THIS DRIVER:
-===================================
+# HOW-TO INSTALL AND USE THIS DRIVER
 
+## Introduction
 
+This driver is usable by all printer devices which understand the QPDL (Quick Page Description Language) language. It covers several _Samsung_, _Xerox_, _Dell_ and _Ricoh_ printers like the ML-2250 which uses it as a native printer language (Check the technical documentation for more information).
 
-Introduction:
-------------
+## Requested
 
-	This driver is usable by all printer devices which understand the QPDL
-(Quick Page Description Language) language. It covers several _Samsung_, 
-_Xerox_, _Dell_ and _Ricoh_ printers like the ML-2250 which uses it as a native 
-printer language (Check the technical documentation for more information).
+To use this driver you need.... a QPDL printer! Last but not least you need CUPS. It has been tested with modern CUPS versions and works fine.
 
+You need to install the cups development package (`libcups2-dev`, `libcupsimage2-dev` or equivalent). `libjbig` is needed unless disabled.
 
+### Summary
 
-Requested:
-----------
+* CUPS (>= 1.1)
+* libcups, libcupsimage
+* libjbig (Optional, for JBIG-capable printers)
+* CMake (>= 3.16)
+* C++23 capable compiler (GCC 12+, Clang 15+, MSVC 19.33+)
 
-	To use this driver you need.... a QPDL printer! Last but not least you
-need CUPS. It has been tested with modern CUPS versions and works fine.
+## Installation
 
-	You need to install the cups development package (libcups2-dev,
-libcupsimage2-dev or equivalent). libjbig is needed unless disabled.
+> [!IMPORTANT]
+> If you are upgrading your current version, you MUST delete your printer in the CUPS interface and install it again. This operation MUST be done since CUPS makes a copy of the PPD file and this file is modified between versions.
 
-Summary:
-	* CUPS (>= 1.1)
-	* libcups, libcupsimage
-	* libjbig (Optional, for JBIG-capable printers)
-	* CMake (>= 3.16)
-	* C++23 capable compiler (GCC 12+, Clang 15+, MSVC 19.33+)
+Perform the compilation by following these steps:
 
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --build build --parallel
 
+If no errors appear you can install the filter and the drivers:
 
-Installation:
--------------
+    sudo cmake --install build
 
-  +=======================================================================+
-  |                  !!!      IMPORTANT NOTICE      !!!                   |
-  +=======================================================================+
-  |      If you are upgrading your current version, you MUST delete       |
-  |     your printer in the CUPS interface and install it again. This     |
-  |   operation MUST be done since CUPS make a copy of the PPD file and   |
-  |                this file is modified between versions.                |
-  +=======================================================================+
+To finish you have to visit <http://localhost:631> with your favourite browser and add a new printer by selecting the correct printer in the list.
 
-	Perform the compilation by following these steps:
+For advanced build options (cross-compilation, address sanitizer, presets), see the BUILDING.md file.
 
-		$ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-		$ cmake --build build --parallel
+and HAVE FUN ;-)
 
-	If no errors appear you can install the filter and the drivers:
+## Installation of the color profile for color printers
 
-		$ sudo cmake --install build
+Color printers needs color profile files to get better results. These files are provided by your printer manufacturer and you have to install them manually. To do that, download the linux official drivers and locate the "cms" directory. Install them with the command:
 
-	To finish you have to visit http://localhost:631 with your favourite
-	browser and add a new printer by selecting the correct printer in the list.
+    cmake .. -DCMSDIR=/path/to/cms/directory -DMANUFACTURER=samsung
+    make install
 
-	For advanced build options (cross-compilation, address sanitizer, presets),
-	see the BUILDING.md file.
+Samsung color profile files are available at:
 
-	and HAVE FUN ;-)
+    <https://openprinting.github.io/splix/samsung_cms.tar.bz2>
 
+## Compilation options
 
+SpliX code can be tuned by using specific CMake options (`-DOPTION=VALUE`). All these options are:
 
-Installation of the color profile for color printers:
------------------------------------------------------
+* `DISABLE_JBIG=ON` [OFF by default]:
+  Since some of the JBIG algorithm may be patented, this option disables the use of this algorithm.
+* `DISABLE_THREADS=ON` [OFF by default]:
+  This option will disable the use of threads in the SpliX code. If it is disabled, _manual duplex_ will no longer work.
+* `DISABLE_BLACKOPTIM=ON` [OFF by default]:
+  A black correction algorithm is used to optimize the use of black and color toner on color printers.
+* `THREADS=XX` [2 by default]:
+  Specify the number of _compression_ threads to use.
+* `CACHESIZE=XX` [30 by default]:
+  Specify the number of _compressed_ pages kept into memory waiting for the rendering (in Megabytes).
 
-	Color printers needs color profile files to get better results. These
-files are provided by your printer manufacturer and you have to install them
-manually. To do that, download the linux official drivers and locate the "cms"
-directory. Install them with the command:
+### Example
 
-		$ cmake .. -DCMSDIR=/path/to/cms/directory -DMANUFACTURER=samsung
-		$ make install
-
-	Samsung color profile files are available at:
-
-		https://openprinting.github.io/splix/samsung_cms.tar.bz2
-
-
-
-Compilation options:
---------------------
-
-	SpliX code can be tuned by using specific CMake options (-DOPTION=VALUE).
-	All these options are:
-
-		* DISABLE_JBIG=ON [OFF by default]:
-			Since some of the JBIG algorithm may patented, this
-			option disable the use of this algorithm.
-		* DISABLE_THREADS=ON [OFF by default]:
-			This option will disable the use of threads in the SpliX
-			code. If it is disabled, _manual duplex_ will no longer 
-			work.
-		* DISABLE_BLACKOPTIM=ON [OFF by default]:
-			A black correction algorithm is used to optimize the use
-			of black and color toner on color printers.
-		* THREADS=XX [2 by default]:
-			Specify the number of _compression_ threads to use.
-		* CACHESIZE=XX [30 by default]:
-			Specify the number of _compressed_ pages kept into memory
-			waiting for the rendering (in Megabytes).
-
-	Example:
-
-		$ cmake .. -DDISABLE_JBIG=ON -DTHREADS=4 -DCACHESIZE=100
-		$ make
+    cmake .. -DDISABLE_JBIG=ON -DTHREADS=4 -DCACHESIZE=100
+    make

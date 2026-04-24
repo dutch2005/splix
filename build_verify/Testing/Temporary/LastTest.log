@@ -1,10 +1,10 @@
-Start testing: Apr 24 12:19 UTC
+Start testing: Apr 24 17:50 UTC
 ----------------------------------------------------------
 1/13 Testing: PrinterTest.Initialization
 1/13 Test: PrinterTest.Initialization
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=PrinterTest.Initialization" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"PrinterTest.Initialization" start time: Apr 24 12:19 UTC
+"PrinterTest.Initialization" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -20,10 +20,10 @@ Note: Google Test filter = PrinterTest.Initialization
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.07 sec
 ----------------------------------------------------------
 Test Passed.
-"PrinterTest.Initialization" end time: Apr 24 12:19 UTC
+"PrinterTest.Initialization" end time: Apr 24 17:50 UTC
 "PrinterTest.Initialization" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -31,7 +31,7 @@ Test Passed.
 2/13 Test: PrinterTest.MoveSemantics
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=PrinterTest.MoveSemantics" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"PrinterTest.MoveSemantics" start time: Apr 24 12:19 UTC
+"PrinterTest.MoveSemantics" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -47,10 +47,10 @@ Note: Google Test filter = PrinterTest.MoveSemantics
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"PrinterTest.MoveSemantics" end time: Apr 24 12:19 UTC
+"PrinterTest.MoveSemantics" end time: Apr 24 17:50 UTC
 "PrinterTest.MoveSemantics" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -58,7 +58,7 @@ Test Passed.
 3/13 Test: PrinterTest.DefaultInitialization
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=PrinterTest.DefaultInitialization" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"PrinterTest.DefaultInitialization" start time: Apr 24 12:19 UTC
+"PrinterTest.DefaultInitialization" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -74,10 +74,10 @@ Note: Google Test filter = PrinterTest.DefaultInitialization
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"PrinterTest.DefaultInitialization" end time: Apr 24 12:19 UTC
+"PrinterTest.DefaultInitialization" end time: Apr 24 17:50 UTC
 "PrinterTest.DefaultInitialization" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -85,7 +85,7 @@ Test Passed.
 4/13 Test: PPDValueTest.StringSafety
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=PPDValueTest.StringSafety" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"PPDValueTest.StringSafety" start time: Apr 24 12:19 UTC
+"PPDValueTest.StringSafety" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -101,10 +101,10 @@ Note: Google Test filter = PPDValueTest.StringSafety
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"PPDValueTest.StringSafety" end time: Apr 24 12:19 UTC
+"PPDValueTest.StringSafety" end time: Apr 24 17:50 UTC
 "PPDValueTest.StringSafety" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -112,7 +112,7 @@ Test Passed.
 5/13 Test: SemaphoreTest.BasicAcquireRelease
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=SemaphoreTest.BasicAcquireRelease" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"SemaphoreTest.BasicAcquireRelease" start time: Apr 24 12:19 UTC
+"SemaphoreTest.BasicAcquireRelease" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -128,10 +128,10 @@ Note: Google Test filter = SemaphoreTest.BasicAcquireRelease
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"SemaphoreTest.BasicAcquireRelease" end time: Apr 24 12:19 UTC
+"SemaphoreTest.BasicAcquireRelease" end time: Apr 24 17:50 UTC
 "SemaphoreTest.BasicAcquireRelease" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -139,7 +139,7 @@ Test Passed.
 6/13 Test: SemaphoreTest.MultiRelease
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=SemaphoreTest.MultiRelease" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"SemaphoreTest.MultiRelease" start time: Apr 24 12:19 UTC
+"SemaphoreTest.MultiRelease" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -155,10 +155,10 @@ Note: Google Test filter = SemaphoreTest.MultiRelease
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"SemaphoreTest.MultiRelease" end time: Apr 24 12:19 UTC
+"SemaphoreTest.MultiRelease" end time: Apr 24 17:50 UTC
 "SemaphoreTest.MultiRelease" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -166,7 +166,7 @@ Test Passed.
 7/13 Test: SemaphoreTest.ThreadSync
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=SemaphoreTest.ThreadSync" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"SemaphoreTest.ThreadSync" start time: Apr 24 12:19 UTC
+"SemaphoreTest.ThreadSync" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -175,17 +175,17 @@ Note: Google Test filter = SemaphoreTest.ThreadSync
 [----------] Global test environment set-up.
 [----------] 1 test from SemaphoreTest
 [ RUN      ] SemaphoreTest.ThreadSync
-[       OK ] SemaphoreTest.ThreadSync (56 ms)
-[----------] 1 test from SemaphoreTest (56 ms total)
+[       OK ] SemaphoreTest.ThreadSync (53 ms)
+[----------] 1 test from SemaphoreTest (53 ms total)
 
 [----------] Global test environment tear-down
-[==========] 1 test from 1 test suite ran. (56 ms total)
+[==========] 1 test from 1 test suite ran. (53 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.09 sec
+Test time =   0.07 sec
 ----------------------------------------------------------
 Test Passed.
-"SemaphoreTest.ThreadSync" end time: Apr 24 12:19 UTC
+"SemaphoreTest.ThreadSync" end time: Apr 24 17:50 UTC
 "SemaphoreTest.ThreadSync" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -193,7 +193,7 @@ Test Passed.
 8/13 Test: Algo0x11Test.CompressionCorrectness
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=Algo0x11Test.CompressionCorrectness" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"Algo0x11Test.CompressionCorrectness" start time: Apr 24 12:19 UTC
+"Algo0x11Test.CompressionCorrectness" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -210,10 +210,10 @@ DEBUG: SpliX Finished band encoding: type=0x11, size=264
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"Algo0x11Test.CompressionCorrectness" end time: Apr 24 12:19 UTC
+"Algo0x11Test.CompressionCorrectness" end time: Apr 24 17:50 UTC
 "Algo0x11Test.CompressionCorrectness" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -221,7 +221,7 @@ Test Passed.
 9/13 Test: Algo0x11Test.EmptyInput
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=Algo0x11Test.EmptyInput" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"Algo0x11Test.EmptyInput" start time: Apr 24 12:19 UTC
+"Algo0x11Test.EmptyInput" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -238,10 +238,10 @@ ERROR: SpliX Invalid raster dimensions for Algo0x11: 0x0
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.03 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"Algo0x11Test.EmptyInput" end time: Apr 24 12:19 UTC
+"Algo0x11Test.EmptyInput" end time: Apr 24 17:50 UTC
 "Algo0x11Test.EmptyInput" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -249,7 +249,7 @@ Test Passed.
 10/13 Test: Algo0x11Test.LargeEmptyBuffer
 Command: "/workspace/build_verify/splix_gtest" "--gtest_filter=Algo0x11Test.LargeEmptyBuffer" "--gtest_also_run_disabled_tests"
 Directory: /workspace/build_verify
-"Algo0x11Test.LargeEmptyBuffer" start time: Apr 24 12:19 UTC
+"Algo0x11Test.LargeEmptyBuffer" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Running main() from /workspace/build_verify/_deps/googletest-src/googletest/src/gtest_main.cc
@@ -266,10 +266,10 @@ DEBUG: SpliX Finished band encoding: type=0x11, size=264
 [==========] 1 test from 1 test suite ran. (0 ms total)
 [  PASSED  ] 1 test.
 <end of output>
-Test time =   0.04 sec
+Test time =   0.02 sec
 ----------------------------------------------------------
 Test Passed.
-"Algo0x11Test.LargeEmptyBuffer" end time: Apr 24 12:19 UTC
+"Algo0x11Test.LargeEmptyBuffer" end time: Apr 24 17:50 UTC
 "Algo0x11Test.LargeEmptyBuffer" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -277,7 +277,7 @@ Test Passed.
 11/13 Test: rastertoqpdl_usage
 Command: "/workspace/build_verify/rastertoqpdl"
 Directory: /workspace/build_verify
-"rastertoqpdl_usage" start time: Apr 24 12:19 UTC
+"rastertoqpdl_usage" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Usage: /workspace/build_verify/rastertoqpdl job-id user title copies options [file]
@@ -286,7 +286,7 @@ Test time =   0.03 sec
 ----------------------------------------------------------
 Test Pass Reason:
 Required regular expression found. Regex=[Usage:]
-"rastertoqpdl_usage" end time: Apr 24 12:19 UTC
+"rastertoqpdl_usage" end time: Apr 24 17:50 UTC
 "rastertoqpdl_usage" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -294,16 +294,16 @@ Required regular expression found. Regex=[Usage:]
 12/13 Test: pstoqpdl_usage
 Command: "/workspace/build_verify/pstoqpdl"
 Directory: /workspace/build_verify
-"pstoqpdl_usage" start time: Apr 24 12:19 UTC
+"pstoqpdl_usage" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
 Usage: /workspace/build_verify/pstoqpdl job-id user title copies options [file]
 <end of output>
-Test time =   0.02 sec
+Test time =   0.03 sec
 ----------------------------------------------------------
 Test Pass Reason:
 Required regular expression found. Regex=[Usage:]
-"pstoqpdl_usage" end time: Apr 24 12:19 UTC
+"pstoqpdl_usage" end time: Apr 24 17:50 UTC
 "pstoqpdl_usage" time elapsed: 00:00:00
 ----------------------------------------------------------
 
@@ -311,17 +311,32 @@ Required regular expression found. Regex=[Usage:]
 13/13 Test: driver_functional_raster
 Command: "/usr/bin/bash" "/workspace/tests/functional_test.sh" "/workspace/build_verify"
 Directory: /workspace/build_verify
-"driver_functional_raster" start time: Apr 24 12:19 UTC
+"driver_functional_raster" start time: Apr 24 17:50 UTC
 Output:
 ----------------------------------------------------------
-/workspace/tests/functional_test.sh: line 10: $'\r': command not found
-/workspace/tests/functional_test.sh: line 11: set: pipefail: invalid option name
+── Running Functional Raster-to-QPDL Test ──
+>> Using PPD: /workspace/ppd/ml1710.ppd
+>> Feeding dummy raster to filter...
+>> Executing filter with 30s timeout...
+DEBUG: SpliX SpliX filter V. 2.0.2 by Aurélien Croc (AP²C)
+DEBUG: SpliX More information at: http://splix.ap2c.org
+DEBUG: SpliX Compiled with: Threads=enabled (#=2, Cache=30), JBIG=enabled, BlackOptim=enabled
+WARNING: SpliX Cannot find printer destination (PRINTER=splix_test_printer). Proceeding with defaults.
+DEBUG: SpliX Color printer Samsung ML-1710 with QPDL v. 1
+DEBUG: SpliX Cache controller thread loaded and is waiting for a job
+DEBUG: SpliX No more pages
+DEBUG: SpliX Compression thread: work done. See ya
+DEBUG: SpliX Next requested page : 1 (# pages into memory=0/30)
+DEBUG: SpliX Compression thread: work done. See ya
+DEBUG: SpliX Cache controller unloaded. See ya
+✅ Success: Found PJL header in QPDL output.
+✅ Functional Test Passed: Driver produced valid output from raster input.
 <end of output>
-Test time =   0.04 sec
+Test time =   0.25 sec
 ----------------------------------------------------------
-Test Failed.
-"driver_functional_raster" end time: Apr 24 12:19 UTC
+Test Passed.
+"driver_functional_raster" end time: Apr 24 17:50 UTC
 "driver_functional_raster" time elapsed: 00:00:00
 ----------------------------------------------------------
 
-End testing: Apr 24 12:19 UTC
+End testing: Apr 24 17:50 UTC

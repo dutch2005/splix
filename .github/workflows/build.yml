@@ -45,9 +45,8 @@ jobs:
           restore-keys: |
             ccache-cmake-${{ matrix.deb_arch }}-
 
-      # The entire build runs inside a Debian oldstable (Bullseye) container
-      # so the output binary links against an old-enough glibc to run on most
-      # Debian/Ubuntu systems in the field.
+      # The entire build runs inside an Ubuntu 26.04 container
+      # so the output binary links against modern libraries.
       #
       # Both amd64 and arm64 use --platform linux/amd64 here — we no longer
       # need QEMU because the arm64 binary is produced by the cross-compiler,
@@ -65,7 +64,7 @@ jobs:
             -e DEB_ARCH="${{ matrix.deb_arch }}" \
             -e CMAKE_PRESET="${{ matrix.cmake_preset }}" \
             -e GITHUB_REF_NAME="${{ github.ref_name }}" \
-            debian:stable \
+            ubuntu:26.04 \
             bash -c '
               set -euo pipefail
 
@@ -142,7 +141,7 @@ jobs:
           docker run --rm \
             -v "${PWD}:/workspace" \
             -w /workspace \
-            debian:stable \
+            ubuntu:26.04 \
             bash -c '
               set -euo pipefail
               apt-get update -y

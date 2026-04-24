@@ -6,7 +6,7 @@ set -euo pipefail
 
 TARGET_ARCH=${1:-amd64}
 CMAKE_PRESET="ci-${TARGET_ARCH}"
-IMAGE="debian:bookworm"
+IMAGE="ubuntu:26.04"
 
 echo "=================================================="
 echo " 🛠️  SPLIX DOCKER TEST RUNNER"
