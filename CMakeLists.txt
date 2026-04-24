@@ -372,6 +372,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     )
     # For Windows: Prevent overriding the parent project's compiler/linker settings
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    # Prevent GTest from installing its headers and static libraries into our release packages
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    set(INSTALL_GMOCK OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 
     add_executable(splix_gtest tests/splix_gtest.cpp)

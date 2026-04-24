@@ -1,0 +1,12 @@
+Architecture: amd64
+Depends: cups
+Description: CUPS drivers for SPL/QPDL laser printers
+ SpliX printer drivers for Samsung, Xerox, Dell, Lexmark, and Toshiba laser printers
+Homepage: https://github.com/dutch2005/splix
+Maintainer: github-actions@noreply.github.com
+Package: splix
+Priority: optional
+Section: misc
+Version: 2.0.2
+Installed-Size: 1457
+

@@ -1,0 +1,2 @@
+"/usr/bin/gcc-ar-14" qc ../../../lib/libgtest.a "CMakeFiles/gtest.dir/src/gtest-all.cc.o"
+"/usr/bin/gcc-ranlib-14" ../../../lib/libgtest.a

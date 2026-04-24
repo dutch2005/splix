@@ -1,0 +1,1 @@
+/usr/bin/c++ -flto=auto -fno-fat-lto-objects -Wl,--dependency-file=CMakeFiles/splix_gtest.dir/link.d CMakeFiles/splix_gtest.dir/tests/splix_gtest.cpp.o -o splix_gtest  libsplix_core.a lib/libgtest_main.a /usr/lib/x86_64-linux-gnu/libcups.so lib/libgtest.a

@@ -1,0 +1,4 @@
+/workspace/build_ppd_local/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/foo.dir
+/workspace/build_ppd_local/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/boo.dir
+/workspace/build_ppd_local/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/edit_cache.dir
+/workspace/build_ppd_local/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/rebuild_cache.dir
