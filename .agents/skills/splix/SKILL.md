@@ -1,81 +1,54 @@
-```markdown
-# splix Development Patterns
+# SpliX Development Patterns
 
-> Auto-generated skill from repository analysis
+> CUPS printer driver for Samsung/Xerox/Dell QPDL printers
 
 ## Overview
-This skill teaches you the core development patterns and conventions used in the `splix` TypeScript codebase. You'll learn about file naming, import/export styles, commit message conventions, and how to write and run tests. This guide is ideal for contributors or anyone looking to maintain consistency within the `splix` project.
+SpliX is a Linux CUPS filter driver that converts raster data into the Samsung QPDL (Quick Page Description Language) byte-stream protocol. It supports ~100 printer models across Samsung, Xerox, Dell, Lexmark, and Toshiba brands.
+
+## Architecture
+- **Language**: C++23 (compiled with `-std=c++23`)
+- **Build System**: CMake 3.16+ with presets (amd64, arm64, debug, ASan)
+- **Testing**: Google Test (GTest) + functional shell tests + ASan/UBSan CI
+- **Packaging**: CPack `.deb` for Debian/Ubuntu
+
+## Key Binaries
+| Binary | Purpose |
+|--------|---------|
+| `rastertoqpdl` | CUPS raster → QPDL converter (main filter) |
+| `pstoqpdl` | PostScript preprocessor → chains to rastertoqpdl |
 
 ## Coding Conventions
+- **Memory**: `std::unique_ptr`, `std::vector`, `std::span` — zero raw `new`/`delete`
+- **Errors**: `SP::Result<T>` (alias for `std::expected<T, SP::Error>`)
+- **Threads**: `std::jthread` with `stop_token`, `std::mutex`, `std::counting_semaphore`
+- **Includes**: System headers via `<>`, project headers via `""` from `include/`
+- **Comments**: Original French comments preserved alongside English translations
 
-### File Naming
-- **PascalCase** is used for file names.
-  - Example: `MyComponent.ts`, `Utils.ts`
+## Compression Algorithms
+| ID | Class | Description |
+|----|-------|-------------|
+| 0x0D | `Algo0x0D` | Samsung SPL-C run-length (with 0x0E fallback) |
+| 0x0E | `Algo0x0E` | Complementary to 0x0D |
+| 0x11 | `Algo0x11` | LZS-variant compression |
+| 0x13 | `Algo0x13` | JBIG whole-page compression |
+| 0x15 | `Algo0x15` | JBIG banded compression (CLP-315, M2026) |
 
-### Import Style
-- **Relative imports** are used for internal modules.
-  - Example:
-    ```typescript
-    import { MyFunction } from './Utils';
-    ```
+## Build Commands
+```bash
+# Native debug build
+cmake --preset linux-debug && cmake --build --preset linux-debug
 
-### Export Style
-- **Named exports** are preferred.
-  - Example:
-    ```typescript
-    export function doSomething() { /* ... */ }
-    ```
+# Release + package
+cmake --preset linux-amd64-release && cmake --build --preset linux-amd64-release
+cd build-amd64 && cpack -G DEB
 
-### Commit Messages
-- **Conventional commit format** is used.
-- Common prefix: `chore`
-- Example:
-  ```
-  chore: update dependencies and fix minor bugs
-  ```
+# Run tests
+cd build-debug && ctest --output-on-failure
 
-## Workflows
-
-### Making a Change
-**Trigger:** When you want to add a feature or fix a bug  
-**Command:** `/make-change`
-
-1. Create a new branch for your change.
-2. Follow PascalCase for new file names.
-3. Use relative imports for any internal modules.
-4. Use named exports for all exported functions or variables.
-5. Write or update tests in files matching `*.test.*`.
-6. Commit using the conventional format (e.g., `chore: describe your change`).
-7. Open a pull request for review.
-
-### Writing Tests
-**Trigger:** When you add new code or modify existing code  
-**Command:** `/write-test`
-
-1. Create or update a test file with the pattern `*.test.*` (e.g., `MyComponent.test.ts`).
-2. Write tests for your code changes.
-3. Run the tests using the project's test runner (framework unknown; check project scripts or documentation).
-4. Ensure all tests pass before committing.
-
-## Testing Patterns
-
-- Test files follow the `*.test.*` naming pattern, such as `MyComponent.test.ts`.
-- The specific testing framework is not detected; refer to project documentation or scripts for running tests.
-- Example test file:
-  ```typescript
-  // MyComponent.test.ts
-  import { myFunction } from './MyComponent';
-
-  describe('myFunction', () => {
-    it('should work as expected', () => {
-      expect(myFunction()).toBe(true);
-    });
-  });
-  ```
-
-## Commands
-| Command        | Purpose                                      |
-|----------------|----------------------------------------------|
-| /make-change   | Guide for making a code change or feature    |
-| /write-test    | Steps for writing and running tests          |
+# ASan build
+cmake --preset linux-asan && cmake --build --preset linux-asan
 ```
+
+## Testing
+- Test files: `tests/splix_gtest.cpp` (unit), `tests/functional_test.sh` (integration)
+- CI runs: native amd64 + cross-compiled arm64 + ASan/UBSan sanitizer check

@@ -46,10 +46,6 @@ void Band::registerPlane(std::unique_ptr<BandPlane> plane)
  * Mise sur disque / Rechargement
  * Swapping / restoring
  */
-/*
- * Mise sur disque / Rechargement
- * Swapping / restoring
- */
 SP::Result<> Band::swapToDisk(int fd)
 {
     uint32_t colors = static_cast<uint32_t>(_planes.size());
@@ -90,8 +86,6 @@ SP::Result<std::unique_ptr<Band>> Band::restoreIntoMemory(int fd)
 
     return std::move(band);
 }
-
-/* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 

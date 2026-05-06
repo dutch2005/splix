@@ -124,6 +124,3 @@ void Page::setBIH(const uint8_t *bih_data, size_t size) {
 }
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
-
-/* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
-

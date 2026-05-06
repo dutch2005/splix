@@ -242,8 +242,6 @@ SP::Result<std::unique_ptr<Page>> getNextPage()
     auto page = entryPtr->releasePage();
     // entryPtr (the CacheEntry) is destroyed here when we return or at end of scope
 
-    // entryPtr (the CacheEntry) is destroyed here when we return or at end of scope
-
     return page;
 }
 
