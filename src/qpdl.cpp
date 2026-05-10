@@ -372,17 +372,23 @@ bool renderPage(const Request& request, Page* page, bool lastPage)
             /** @todo what about the Short edge? The page isn't rotated?  */
             break;
     }
-    // For CLP-310/315 printers, multiply page dimensions in inches by 300.
-    // Also selects the appropriate band render function.
+
+    width = page->width();
+    height = page->height();
+
     if (0x15 == page->compression()) {
-        width = ceil(300 * (request.printer()->pageWidth() / 72.0));
-        height = ceil(300 * (request.printer()->pageHeight() / 72.0));
         selectedRenderBand = &_renderJBIGBand;
     } else {
-        width = page->width();
-        height = page->height();
         selectedRenderBand = &_renderBand;
     }
+
+    if (request.printer()->fixedBandWidth() || 0x15 == page->compression()) {
+        // For CLP-310/315 and fixed bandwidth printers, multiply page
+        // dimensions in inches by 300.
+        width = ceil(300 * (request.printer()->pageWidth() / 72.0));
+        height = ceil(300 * (request.printer()->pageHeight() / 72.0));
+    }
+
     // Send the page header
     header[0x0] = 0;                                // Signature
     header[0x1] = page->yResolution() / 100;        // Y Resolution
