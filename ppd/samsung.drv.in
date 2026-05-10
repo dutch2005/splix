@@ -80,19 +80,24 @@ Manufacturer "Samsung"
                 {
                     ModelName "ML-1510"
                     PCFileName "ml1510.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     ModelName "ML-1520"
                     PCFileName "ml1520.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     ModelName "ML-1610"
                     Attribute "1284DeviceID" "" "MFG:Samsung;MDL:ML-1610;CMD:GDI;"
                     PCFileName "ml1610.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     ModelName "ML-1710"
                     PCFileName "ml1710.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     ModelName "ML-1740"
                     PCFileName "ml1740.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     #import "srtmode.defs"
                     ModelName "ML-1750"
@@ -126,9 +131,11 @@ Manufacturer "Samsung"
                     	ModelName "ML-2250"
                     	Attribute "1284DeviceID" "" "MFG:Samsung;MDL:ML-2250;"
     	                PCFileName "ml2250.ppd"
+                        Attribute QPDL FixedBandWidth "True"
     		} {
                     	ModelName "ML-2251"
     	                PCFileName "ml2251.ppd"
+                        Attribute QPDL FixedBandWidth "True"
     		}
                 } {
                     Duplex normal
@@ -165,10 +172,12 @@ Manufacturer "Samsung"
                 {
                     ModelName "ML-1630"
                     PCFileName "ml1630.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     ModelName "ML-1640"
                     Attribute "1284DeviceID" "" "MFG:Samsung;MDL:ML-1640 Series;CMD:GDI,FWV;"
                     PCFileName "ml1640.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     ModelName "ML-2010"
                     Attribute "1284DeviceID" "" "MFG:Samsung;MDL:ML-2010;CMD:GDI;"
@@ -179,12 +188,14 @@ Manufacturer "Samsung"
                 } {
                     ModelName "ML-2240"
                     PCFileName "ml2240.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 } {
                     #import "srtmode.defs"
     
                     ModelName "ML-2510"
                     Attribute "1284DeviceID" "" "MFG:Samsung;MDL:ML-2510 Series;CMD:GDI;"
                     PCFileName "ml2510.ppd"
+                    Attribute QPDL FixedBandWidth "True"
                 }
             }
         }
