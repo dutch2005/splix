@@ -40,6 +40,7 @@ class Printer
         unsigned long           _qpdlVersion;
         unsigned long           _bandHeight;
         bool                    _specialBandWidth;
+        bool                    _fixedBandWidth;
         unsigned long           _packetSize;
 
         unsigned char           _paperType;
@@ -112,6 +113,11 @@ class Printer
          *         code (Samsung M2020 Series). Otherwise it returns FALSE.
          */
         bool                    specialBandWidth() const {return _specialBandWidth;}
+        /**
+         * @return TRUE if the printer requires non-variable BandWidth selection
+         *         code (Samsung ML-1510/1520, ML-1610). Otherwise it returns FALSE.
+         */
+        bool                    fixedBandWidth() const {return _fixedBandWidth;}
         /**
           * @return the maximum size of a packet.
           */ 

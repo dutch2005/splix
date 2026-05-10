@@ -165,6 +165,11 @@ static bool _compressBandedPage(const Request& request, Page* page)
                                             page->xResolution(),
                                             pageWidth);
         if (!bandWidthInB) bandWidthInB = lineWidthInB;
+    } else if (request.printer()->fixedBandWidth()) {
+        //Some of QPDL 1 and 2 models require full-width data
+        //regardless of the paper size.
+        //4960px (620 bytes) for 600 DPI
+        bandWidthInB = page->xResolution() * 4960 / 600 / 8;
     }
     else bandWidthInB = lineWidthInB;  //original assumption before M2026 patch
     bandWidth = bandWidthInB * 8;
