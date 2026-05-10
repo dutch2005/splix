@@ -394,12 +394,12 @@ bool renderPage(const Request& request, Page* page, bool lastPage)
     header[0x7] = height >> 8;                      // Printable area height
     header[0x8] = height;                           // Printable area height
     header[0x9] = paperSource;                      // Paper source
-    header[0xa] = request.printer()->unknownByte1();// ??? XXX
+    header[0xa] = request.printer()->unknownByte1();// Always 0 in ULD
     header[0xb] = duplex;                           // Duplex
     header[0xc] = tumble;                           // Tumble
-    header[0xd] = request.printer()->unknownByte2();// ??? XXX
+    header[0xd] = request.printer()->unknownByte2();// Always 0 in ULD
     header[0xe] = request.printer()->qpdlVersion(); // QPDL Version
-    header[0xf] = request.printer()->unknownByte3();// ??? XXX
+    header[0xf] = request.printer()->unknownByte3();// Colorplanes
     header[0x10] = page->xResolution() / 100;       // X Resolution
     if (write(STDOUT_FILENO, (unsigned char*)&header, 0x11) == -1) {
         ERRORMSG(_("Error while sending data to the printer (%u)"), errno);
