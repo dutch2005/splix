@@ -20,9 +20,11 @@
  */
 #include <errno.h>
 #include <stdlib.h>
-#include <cups/ppd.h>
+#include <signal.h>
 #include <cups/cups.h>
+#include "core.h"
 #include "cache.h"
+#include "page.h"
 #include "errlog.h"
 #include "version.h"
 #include "request.h"
@@ -30,12 +32,26 @@
 #include "rendering.h"
 #include "options.h"
 
+static void handle_signal(int sig)
+{
+    (void)sig;
+    g_stopJob = 1;
+}
+
 int main(int argc, char **argv)
 {
     const char *jobid, *user, *title, *options, *ppdFile, *file;
     unsigned long copies;
     Request request;
     PPDFile ppd;
+    struct sigaction action;
+
+    // Register signal handlers for clean termination
+    action.sa_handler = handle_signal;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+    sigaction(SIGINT, &action, NULL);
+    sigaction(SIGTERM, &action, NULL);
 
 
     // Check the given arguments
@@ -49,7 +65,7 @@ int main(int argc, char **argv)
     title = argv[3];
     options = argv[5];
     file = argc == 7 ? argv[6] : NULL;
-    copies = strtol(argv[4], (char **)NULL, 10);
+    copies = strtol(argv[4], nullptr, 10);
     ppdFile = getenv("PPD");
 
 
@@ -68,8 +84,10 @@ int main(int argc, char **argv)
     }
 
     // Open the PPD file
-    if (!ppd.open(ppdFile, PPDVERSION, options))
+    if (auto res = ppd.open(ppdFile ? ppdFile : "", PPDVERSION, options); !res) {
+        ERRORMSG(_("Failed to open PPD file: %s"), SP::to_string(res.error()).data());
         return 1;
+    }
 
     // Load the request
     if (!request.loadRequest(&ppd, jobid, user, title, copies))

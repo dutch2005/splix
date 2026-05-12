@@ -21,6 +21,16 @@
 #ifndef _CORE_H_
 #define _CORE_H_
 
+#include <csignal>
+
+// Global stop flag for signal handling (defined in core.cpp)
+extern volatile sig_atomic_t g_stopJob;
+
+/**
+ * Returns true if a termination signal has been received.
+ */
+inline bool isInterrupted() { return g_stopJob != 0; }
+
 #endif /* _CORE_H_ */
 
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */

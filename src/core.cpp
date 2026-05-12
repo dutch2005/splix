@@ -20,5 +20,7 @@
  */
 #include "core.h"
 
+volatile sig_atomic_t g_stopJob = 0;
+
 /* vim: set expandtab tabstop=4 shiftwidth=4 smarttab tw=80 cin enc=utf8: */
 
