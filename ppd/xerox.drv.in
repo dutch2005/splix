@@ -123,6 +123,7 @@ Manufacturer "Xerox"
                 ModelName "Phaser 3117"
                 Attribute "1284DeviceID" "" "MFG:Xerox;MDL:Phaser 3117;CMD:GDI;"
                 PCFileName "ph3117.ppd"
+                Attribute QPDL FixedBandWidth "True"
             } {
                 Resolution k 1 0 0 0 "1200x600dpi/1200x600 DPI"
 
