@@ -94,6 +94,45 @@
                 "CMAKE_C_COMPILER_LAUNCHER": "ccache",
                 "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
             }
+        },
+        {
+            "name": "ci-armhf",
+            "displayName": "CI ARMHF",
+            "description": "Used by GitHub Actions for ARMHF cross-builds",
+            "generator": "Unix Makefiles",
+            "binaryDir": "/tmp/splix-build",
+            "toolchainFile": "${sourceDir}/cmake/toolchain-armhf.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+            }
+        },
+        {
+            "name": "ci-i386",
+            "displayName": "CI i386",
+            "description": "Used by GitHub Actions for i386 cross-builds",
+            "generator": "Unix Makefiles",
+            "binaryDir": "/tmp/splix-build",
+            "toolchainFile": "${sourceDir}/cmake/toolchain-i386.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+            }
+        },
+        {
+            "name": "ci-riscv64",
+            "displayName": "CI RISCV64",
+            "description": "Used by GitHub Actions for RISCV64 cross-builds",
+            "generator": "Unix Makefiles",
+            "binaryDir": "/tmp/splix-build",
+            "toolchainFile": "${sourceDir}/cmake/toolchain-riscv64.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+                "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+            }
         }
     ],
 
@@ -121,6 +160,18 @@
         {
             "name": "ci-arm64",
             "configurePreset": "ci-arm64"
+        },
+        {
+            "name": "ci-armhf",
+            "configurePreset": "ci-armhf"
+        },
+        {
+            "name": "ci-i386",
+            "configurePreset": "ci-i386"
+        },
+        {
+            "name": "ci-riscv64",
+            "configurePreset": "ci-riscv64"
         }
     ]
 }

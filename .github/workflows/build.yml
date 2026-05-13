@@ -8,26 +8,19 @@ on:
     branches: [master, main, modernized-2026]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     name: Build ${{ matrix.deb_arch }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false          # let both arches run even if one fails
+      fail-fast: false
       matrix:
         include:
           # ── AMD64 (native) ──────────────────────────────────────────────
-          # The container runs natively on the x86-64 GitHub runner.
           - deb_arch: amd64
             cmake_preset: ci-amd64
 
-          # ── ARM64 (cross-compiled, NOT QEMU) ───────────────────────────
-          # The container still runs on the x86-64 runner, but uses
-          # aarch64-linux-gnu-g++ to produce ARM64 binaries directly.
-          # This is 5-10× faster than QEMU emulation.
+          # ── ARM64 (cross-compiled) ─────────────────────────────────────
           - deb_arch: arm64
             cmake_preset: ci-arm64
             
@@ -46,9 +39,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # Fetch all history for all branches and tags
 
-      # ccache persists across workflow runs to speed up incremental builds.
-      # The cache key includes the arch so amd64 and arm64 caches don't mix.
       - name: Restore ccache
         uses: actions/cache@v4
         with:
@@ -57,9 +50,6 @@ jobs:
           restore-keys: |
             ccache-cmake-${{ matrix.deb_arch }}-
 
-      # The entire build runs inside a Debian oldstable (Bullseye) container
-      # so the output binary links against an old-enough glibc to run on most
-      # Debian/Ubuntu systems in the field.
       - name: Build and package inside Debian oldstable
         run: |
           mkdir -p "${PWD}/artifacts" "${PWD}/.ccache"
@@ -73,11 +63,11 @@ jobs:
             -e DEB_ARCH="${{ matrix.deb_arch }}" \
             -e CMAKE_PRESET="${{ matrix.cmake_preset }}" \
             -e GITHUB_REF_NAME="${{ github.ref_name }}" \
-            debian:stable \
+            debian:oldstable \
             bash -c '
               set -euo pipefail
 
-              # ── Base dependencies (same for all architectures) ──────────────
+              # ── Base dependencies ──────────────────────────────────────────
               apt-get update -y
               apt-get install -y --fix-missing \
                 build-essential cmake \
@@ -85,43 +75,21 @@ jobs:
                 pkg-config ccache git ca-certificates
 
               # ── Cross-compilation dependencies ───────────────────────
-              # These are only installed for non-native matrix entries.
-              if [ "${DEB_ARCH}" = "arm64" ]; then
-                dpkg --add-architecture arm64
+              if [ "${DEB_ARCH}" != "amd64" ]; then
+                dpkg --add-architecture "${DEB_ARCH}"
                 apt-get update -y
-                apt-get install -y --fix-missing \
-                  gcc-aarch64-linux-gnu \
-                  g++-aarch64-linux-gnu \
-                  libcups2-dev:arm64 \
-                  libcupsimage2-dev:arm64 \
-                  libjbig-dev:arm64
-              elif [ "${DEB_ARCH}" = "armhf" ]; then
-                dpkg --add-architecture armhf
-                apt-get update -y
-                apt-get install -y --fix-missing \
-                  gcc-arm-linux-gnueabihf \
-                  g++-arm-linux-gnueabihf \
-                  libcups2-dev:armhf \
-                  libcupsimage2-dev:armhf \
-                  libjbig-dev:armhf
-              elif [ "${DEB_ARCH}" = "i386" ]; then
-                dpkg --add-architecture i386
-                apt-get update -y
-                apt-get install -y --fix-missing \
-                  gcc-i686-linux-gnu \
-                  g++-i686-linux-gnu \
-                  libcups2-dev:i386 \
-                  libcupsimage2-dev:i386 \
-                  libjbig-dev:i386
-              elif [ "${DEB_ARCH}" = "riscv64" ]; then
-                dpkg --add-architecture riscv64
-                apt-get update -y || true
-                apt-get install -y --fix-missing \
-                  gcc-riscv64-linux-gnu \
-                  g++-riscv64-linux-gnu \
-                  libcups2-dev:riscv64 \
-                  libcupsimage2-dev:riscv64 \
-                  libjbig-dev:riscv64
+                
+                case "${DEB_ARCH}" in
+                  arm64)   CROSS_PKG="gcc-aarch64-linux-gnu g++-aarch64-linux-gnu" ;;
+                  armhf)   CROSS_PKG="gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf" ;;
+                  i386)    CROSS_PKG="gcc-i686-linux-gnu g++-i686-linux-gnu" ;;
+                  riscv64) CROSS_PKG="gcc-riscv64-linux-gnu g++-riscv64-linux-gnu" ;;
+                esac
+
+                apt-get install -y --fix-missing ${CROSS_PKG} \
+                                   libcups2-dev:${DEB_ARCH} \
+                                   libcupsimage2-dev:${DEB_ARCH} \
+                                   libjbig-dev:${DEB_ARCH}
               fi
 
               # Put ccache wrappers first so they intercept gcc/g++ calls.
@@ -169,13 +137,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Build and Test with Sanitizers
         run: |
           docker run --rm \
             -v "${PWD}:/workspace" \
             -w /workspace \
-            debian:stable \
+            debian:oldstable \
             bash -c '
               set -euo pipefail
               apt-get update -y
